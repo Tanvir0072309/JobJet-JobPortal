@@ -1,17 +1,22 @@
 <div align="center">
 
+  <!-- App Logo -->
+  <img src="https://res.cloudinary.com/dat8orrws/image/upload/v1788690254/Gemini_Generated_Image_mc57kzmc57kzmc57.png" alt="JobJet Logo" width="160" style="border-radius: 20px; margin-bottom: 15px;" />
+
   # 🚀 JobJet — Next-Gen Job Portal Platform
 
-  **Find your dream job or hire top talent seamlessly.**  
+  **Connecting Job Seekers and Employers effortlessly with Real-Time Data.**  
   *Built with Node.js, Express, PostgreSQL & Expo React Native.*
 
   <br />
 
-  [![Download APK](https://img.shields.io/badge/⚡_Download_Android_APK-3DDC84?style=for-the-badge&logo=android&logoColor=white)](https://expo.dev/artifacts/eas/Ab2wzbnAUEaHg7uKFp5CSCgmiFPInT6B5ppDPfVk14o.apk)
+  <!-- Action Badges -->
+  [![Download APK](https://img.shields.io/badge/⚡_Download_Android_APK-3DDC84?style=for-the-badge&logo=android&logoColor=white)](https://expo.dev/artifacts/eas/-gRpYUyZ-2C0RkPXXdD43j6-wEXO-pY9XKLiaT8PJY8.apk)
   [![Backend Status](https://img.shields.io/badge/Backend-Live_on_Render-46E3B7?style=for-the-badge&logo=render&logoColor=white)](https://jobjet-jobportal.onrender.com)
 
   <br />
 
+  <!-- Tech Stack Badges -->
   [![PostgreSQL](https://img.shields.io/badge/Database-Neon.tech-022929?style=flat-square&logo=postgresql)](https://neon.tech)
   [![Expo](https://img.shields.io/badge/Mobile-Expo_React_Native-000000?style=flat-square&logo=expo)](https://expo.dev)
   [![NodeJS](https://img.shields.io/badge/Server-Node.js-339933?style=flat-square&logo=nodedotjs)](https://nodejs.org)
@@ -38,12 +43,7 @@
 
 ## 🎯 About The Project
 
-**JobJet** is a high-performance, full-stack job application suite. It bridges the gap between recruiters and job seekers through a lightning-fast mobile frontend powered by Expo and a scalable RESTful API backed by Neon PostgreSQL.
-
-### Why JobJet?
-- ⚡ **Lightning Fast:** Dynamic cloud-hosted API routing.
-- 🔐 **Enterprise Auth:** Secure, token-based authentication system.
-- 📱 **Cross-Platform:** Native-feel experience built for Android & iOS.
+**JobJet** is a scalable, full-stack mobile job portal application engineered for maximum performance and intuitive navigation. Powered by a high-availability **Neon PostgreSQL** database, a **Render-hosted Node.js backend**, and an **Expo React Native frontend**, JobJet brings a seamless recruitment workflow to mobile devices.
 
 ---
 
@@ -51,46 +51,46 @@
 
 | Feature | Description |
 | :--- | :--- |
-| **🔑 User Authentication** | Secure Login/Signup with encrypted JWT payload and password hashing. |
-| **💼 Job Feed & Search** | Real-time job browsing with intuitive query filters and category tags. |
-| **🏢 Recruiter Portal** | Seamless job posting creation, management, and applicant tracking. |
-| **👤 User Profiles** | Dynamic profile updates with experience management and resume details. |
+| 🔑 **Secure Authentication** | Robust user registration and login using JWT tokens and password hashing. |
+| 💼 **Live Job Search** | Real-time browsing, search filters, and detail views for active job vacancies. |
+| 🏢 **Recruiter Portal** | Simple interface for employers to post, edit, and track job listings. |
+| ⚡ **Cloud Connected** | Fully wired with production REST APIs hosted on Render and Neon DB. |
 
 ---
 
 ## 🛠️ Tech Stack
 
-### **Frontend (Mobile)**
-* **Core:** React Native (Expo SDK)
-* **Build Engine:** EAS Build (Expo Application Services)
-* **Environment:** `EXPO_PUBLIC_API_URL` for production API linking
+### **Frontend (Mobile App)**
+* **Framework:** React Native with Expo SDK (Expo Router)
+* **Build System:** EAS Build (`.apk` & `.aab` production builds)
+* **Config:** `EXPO_PUBLIC_API_URL` environment integration
 
-### **Backend (API)**
+### **Backend (REST API)**
 * **Runtime:** Node.js & Express.js
-* **Database:** PostgreSQL (Cloud instance via Neon.tech)
-* **Deployment:** Render PaaS (`jobjet-jobportal.onrender.com`)
+* **Database:** Cloud PostgreSQL via Neon.tech
+* **Hosting:** Render (`https://jobjet-jobportal.onrender.com`)
 
 ---
 
 ## 📲 Quick Download & Install
 
-Testing the live app on an Android device takes less than 2 minutes:
+Experience **JobJet** directly on your Android device in just a few steps:
 
-1. Tap the green **Download Android APK** button at the top (or click [here](https://expo.dev/artifacts/eas/Ab2wzbnAUEaHg7uKFp5CSCgmiFPInT6B5ppDPfVk14o.apk)).
+1. Click the green **Download Android APK** button above (or use this [Direct Download Link](https://expo.dev/artifacts/eas/-gRpYUyZ-2C0RkPXXdD43j6-wEXO-pY9XKLiaT8PJY8.apk)).
 2. Open the downloaded `.apk` file on your smartphone.
-3. Allow **"Install from Unknown Sources"** if prompted by your system.
-4. Launch JobJet and start testing!
+3. If prompted, enable **"Install from Unknown Sources"** in system settings.
+4. Launch **JobJet** and explore!
 
 ---
 
-## 💻 Getting Started (Local Setup)
+## 💻 Getting Started (Local Development)
 
 ### **Prerequisites**
-- Node.js (v18 or higher)
+- Node.js (v18+)
 - npm or yarn
-- Expo Go App on mobile (or Android Emulator)
+- Expo Go App or Android Studio Emulator
 
 ### **1. Clone Repository**
 ```bash
-git clone [https://github.com/YOUR_GITHUB_USERNAME/jobjet.git](https://github.com/YOUR_GITHUB_USERNAME/jobjet.git)
+git clone [https://github.com/tanvir0072/jobjet.git](https://github.com/tanvir0072/jobjet.git)
 cd jobjet
