@@ -3,7 +3,7 @@
   <!-- App Logo -->
   <img src="https://res.cloudinary.com/dat8orrws/image/upload/v1788690254/Gemini_Generated_Image_mc57kzmc57kzmc57.png" alt="JobJet Logo" width="160" style="border-radius: 20px; margin-bottom: 15px;" />
 
-  # 🚀 JobJet — Next-Gen Job Portal Platform
+  # JobJet — Job Portal Platform
 
   **Connecting Job Seekers and Employers effortlessly with Real-Time Data.**  
   *Built with Node.js, Express, PostgreSQL & Expo React Native.*
