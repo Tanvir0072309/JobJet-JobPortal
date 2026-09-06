@@ -11,7 +11,7 @@
   <br />
 
   <!-- Action Badges -->
-  [![Download APK](https://img.shields.io/badge/⚡_Download_Android_APK-3DDC84?style=for-the-badge&logo=android&logoColor=white)](https://expo.dev/artifacts/eas/-gRpYUyZ-2C0RkPXXdD43j6-wEXO-pY9XKLiaT8PJY8.apk)
+  [![Download APK](https://img.shields.io/badge/⚡_Download_Android_APK-3DDC84?style=for-the-badge&logo=android&logoColor=white)](https://expo.dev/artifacts/eas/iAtk2TKyDVXBbfdbYKtjdpFRFnGfTcYQ7c0e16s5cSk.apk)
   [![Backend Status](https://img.shields.io/badge/Backend-Live_on_Render-46E3B7?style=for-the-badge&logo=render&logoColor=white)](https://jobjet-jobportal.onrender.com)
 
   <br />
@@ -76,7 +76,7 @@
 
 Experience **JobJet** directly on your Android device in just a few steps:
 
-1. Click the green **Download Android APK** button above (or use this [Direct Download Link](https://expo.dev/artifacts/eas/-gRpYUyZ-2C0RkPXXdD43j6-wEXO-pY9XKLiaT8PJY8.apk)).
+1. Click the green **Download Android APK** button above (or use this [Direct Download Link](https://expo.dev/artifacts/eas/iAtk2TKyDVXBbfdbYKtjdpFRFnGfTcYQ7c0e16s5cSk.apk)).
 2. Open the downloaded `.apk` file on your smartphone.
 3. If prompted, enable **"Install from Unknown Sources"** in system settings.
 4. Launch **JobJet** and explore!
