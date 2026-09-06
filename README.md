@@ -11,7 +11,7 @@
   <br />
 
   <!-- Action Badges -->
-  [![Download APK](https://img.shields.io/badge/⚡_Download_Android_APK-3DDC84?style=for-the-badge&logo=android&logoColor=white)](https://expo.dev/artifacts/eas/sIlPsYX1SXIuTGsgKucUPXpn8ULhEt6KJL5Z6uP2Rgs.apk)
+  [![Download APK](https://img.shields.io/badge/⚡_Download_Android_APK-3DDC84?style=for-the-badge&logo=android&logoColor=white)](https://expo.dev/artifacts/eas/X1fJGkrV2tm1dqSrYm45-LXNnuWiZOuuUqCY3xfB1qA.apk)
   [![Backend Status](https://img.shields.io/badge/Backend-Live_on_Render-46E3B7?style=for-the-badge&logo=render&logoColor=white)](https://jobjet-jobportal.onrender.com)
 
   <br />
