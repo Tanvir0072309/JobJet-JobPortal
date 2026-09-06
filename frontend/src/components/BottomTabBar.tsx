@@ -2,6 +2,7 @@ import React from "react";
 import { View, Text, Pressable, StyleSheet } from "react-native";
 import { useRouter, usePathname } from "expo-router";
 import { Feather } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors, spacing, typography } from "../constants/jobjetTheme";
 
 type TabItem = {
@@ -23,11 +24,12 @@ const TABS: TabItem[] = [
 export function BottomTabBar() {
   const router = useRouter();
   const pathname = usePathname() || "";
+  const insets = useSafeAreaInsets();
 
   const isActive = (href: string) => pathname.startsWith(href.replace("(main)/", "").replace(/^\//, "/"));
 
   return (
-    <View style={styles.bar}>
+    <View style={[styles.bar, { paddingBottom: Math.max(insets.bottom, spacing.md) }]}>
       {TABS.map((tab) => {
         const active = isActive(tab.href);
         return (

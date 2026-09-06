@@ -4,11 +4,11 @@ import { useAuth } from "../context/AuthContext";
 import { LoadingState } from "../components/LoadingState";
 
 // Entry point: send authenticated users straight to Applications (the
-// required first page after login), everyone else to Login.
+// required first page after login), everyone else to the Welcome screen.
 export default function Index() {
   const { isAuthenticated, isBootstrapping } = useAuth();
 
   if (isBootstrapping) return <LoadingState label="Starting JobJet..." />;
 
-  return <Redirect href={isAuthenticated ? "/(main)/applications" : "/login"} />;
+  return <Redirect href={isAuthenticated ? "/(main)/applications" : "/welcome"} />;
 }

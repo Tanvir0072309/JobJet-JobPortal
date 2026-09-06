@@ -26,9 +26,25 @@ const storage = multer.diskStorage({
   },
 });
 
+const ALLOWED_MIME_TYPES = new Set([
+  "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "image/png",
+  "image/jpeg",
+]);
+
 const upload = multer({
   storage,
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+  fileFilter: (req, file, cb) => {
+    if (ALLOWED_MIME_TYPES.has(file.mimetype)) {
+      return cb(null, true);
+    }
+    const err = new Error("Please upload a PDF, Word document (.doc/.docx), PNG, or JPG file.");
+    err.status = 400;
+    cb(err);
+  },
 });
 
 router.get("/", listDocuments);

@@ -2,6 +2,7 @@ import React from "react";
 import { View, Text, Pressable, StyleSheet } from "react-native";
 import { useRouter, usePathname } from "expo-router";
 import { Feather } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../context/AuthContext";
 import { colors, spacing, typography, radius } from "../constants/jobjetTheme";
 
@@ -24,12 +25,13 @@ export function TopBar() {
   const router = useRouter();
   const pathname = usePathname() || "";
   const { user } = useAuth();
+  const insets = useSafeAreaInsets();
   const title = getTitle(pathname);
   const isProfilePage = pathname.replace("/(main)", "").startsWith("/profile");
   const initial = (user?.email || "?").trim().charAt(0).toUpperCase();
 
   return (
-    <View style={styles.bar}>
+    <View style={[styles.bar, { paddingTop: insets.top + spacing.md }]}>
       <Text style={styles.title}>{title}</Text>
       <Pressable
         onPress={() => router.push("/(main)/profile" as any)}

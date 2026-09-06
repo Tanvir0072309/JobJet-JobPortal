@@ -86,7 +86,20 @@ export default function ProfileScreen() {
   };
 
   const handleUpload = async (documentType: string) => {
-    const result = await DocumentPicker.getDocumentAsync({ multiple: false, copyToCacheDirectory: true });
+    const result = await DocumentPicker.getDocumentAsync({
+      multiple: false,
+      copyToCacheDirectory: true,
+      // Explicit allow-list so PDFs (and Word docs / images) are reliably
+      // pickable on every platform — leaving this as the default "*/*" was
+      // causing some Android file-picker apps to hide PDFs entirely.
+      type: [
+        "application/pdf",
+        "application/msword",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "image/png",
+        "image/jpeg",
+      ],
+    });
     if (result.canceled || !result.assets?.[0]) return;
 
     const asset = result.assets[0];
