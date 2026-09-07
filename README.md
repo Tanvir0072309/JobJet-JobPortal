@@ -10,7 +10,7 @@
 
   <br />
 
-  [![Download APK](https://img.shields.io/badge/⚡_Download_Android_APK-3DDC84?style=for-the-badge&logo=android&logoColor=white)](https://expo.dev/artifacts/eas/CAkZ_ShhlYUg2q_v4qZ-1hn1SskbJWtjBLrn7op9OiA.apk)
+  [![Download APK](https://img.shields.io/badge/⚡_Download_Android_APK-3DDC84?style=for-the-badge&logo=android&logoColor=white)](https://expo.dev/artifacts/eas/FK01ztIKgKEu2nl_nPUPRg5iQnPOjT_DbOkPZaoig_M.apk)
   [![Backend Status](https://img.shields.io/badge/API-Live_on_Render-46E3B7?style=for-the-badge&logo=render&logoColor=white)](https://jobjet-jobportal.onrender.com)
 
   <br />
