@@ -6,7 +6,7 @@ export function getApiCredentials() {
   );
 }
 
-export function saveApiCredential(provider: "groq", apiKey: string) {
+export function saveApiCredential(provider: "groq" | "hunter", apiKey: string) {
   return apiRequest("/api/settings/api-credentials", {
     method: "PUT",
     body: { provider, apiKey },
@@ -42,7 +42,7 @@ export function saveSmtpCredential(smtpConfig: SmtpConfig) {
   });
 }
 
-export function deleteApiCredential(provider: "groq" | "tomba" | "smtp") {
+export function deleteApiCredential(provider: "groq" | "tomba" | "hunter" | "smtp") {
   return apiRequest(`/api/settings/api-credentials/${provider}`, { method: "DELETE" });
 }
 

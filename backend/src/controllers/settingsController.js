@@ -2,7 +2,7 @@ const db = require("../config/db");
 const asyncHandler = require("../utils/asyncHandler");
 const { encrypt } = require("../utils/crypto");
 
-const ALLOWED_PROVIDERS = ["groq", "tomba", "smtp"];
+const ALLOWED_PROVIDERS = ["groq", "tomba", "hunter", "smtp"];
 
 // GET /api/settings/api-credentials
 // Returns only whether each provider is configured + a masked hint - never the real key.

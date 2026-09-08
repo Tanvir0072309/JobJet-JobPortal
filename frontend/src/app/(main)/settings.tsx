@@ -27,6 +27,7 @@ export default function SettingsScreen() {
 
   const [credentials, setCredentials] = useState<Record<string, any>>(cached?.credentials ?? {});
   const [groqKey, setGroqKey] = useState("");
+  const [hunterKey, setHunterKey] = useState("");
   const [tombaKey, setTombaKey] = useState("");
   const [tombaSecret, setTombaSecret] = useState("");
   const [savingProvider, setSavingProvider] = useState<string | null>(null);
@@ -70,13 +71,14 @@ export default function SettingsScreen() {
     }, [load])
   );
 
-  const handleSaveKey = async (provider: "groq") => {
-    const value = groqKey;
+  const handleSaveKey = async (provider: "groq" | "hunter") => {
+    const value = provider === "hunter" ? hunterKey : groqKey;
     if (!value.trim()) return;
     setSavingProvider(provider);
     try {
       await settingsService.saveApiCredential(provider, value.trim());
-      setGroqKey("");
+      if (provider === "hunter") setHunterKey("");
+      else setGroqKey("");
       await load();
     } catch (err) {
       Alert.alert("Couldn't save key", err instanceof ApiError ? err.message : "Please try again.");
@@ -85,7 +87,7 @@ export default function SettingsScreen() {
     }
   };
 
-  const handleRemoveKey = async (provider: "groq" | "tomba") => {
+  const handleRemoveKey = async (provider: "groq" | "hunter" | "tomba") => {
     setSavingProvider(provider);
     try {
       await settingsService.deleteApiCredential(provider);
@@ -201,15 +203,32 @@ export default function SettingsScreen() {
           saving={savingProvider === "groq"}
         />
         <View style={styles.divider} />
-        <Text style={styles.rowLabel}>Tomba API Key + Secret</Text>
+        <CredentialRow
+          label="Hunter API Key (optional)"
+          status={credentials.hunter}
+          value={hunterKey}
+          onChangeText={setHunterKey}
+          onSave={() => handleSaveKey("hunter")}
+          onRemove={() => handleRemoveKey("hunter")}
+          saving={savingProvider === "hunter"}
+        />
+        <Text style={styles.helperNote}>
+          Optional - improves accuracy with verified emails. Without a Hunter or Tomba key, JobJet automatically
+          reads each company's own website (contact/careers/about pages) to find an email instead, so applying
+          always works even with no key configured. Get a free Hunter key at hunter.io if you want it (50
+          credits/month, no card) - some accounts need a work email to sign up, so this is purely optional.
+        </Text>
+        <View style={styles.divider} />
+        <Text style={styles.rowLabel}>Tomba API Key + Secret (optional)</Text>
         {credentials.tomba?.configured ? (
           <Text style={styles.rowValue}>Configured ({credentials.tomba.maskedKey})</Text>
         ) : (
           <Text style={styles.rowValueMuted}>Not configured</Text>
         )}
         <Text style={styles.helperNote}>
-          Used to find a company's contact email before applying. Get a free key + secret at tomba.io (25 searches/50
-          verifications per month, no credit card needed) - sign up, then copy both from your Tomba account settings.
+          Optional fallback if you don't want to use Hunter - some regions block webmail signups on Tomba, so Hunter
+          above is usually the easier one to set up. Get a free key + secret at tomba.io if you'd rather use this
+          instead.
         </Text>
         <Input
           value={tombaKey}

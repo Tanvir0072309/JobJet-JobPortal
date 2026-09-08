@@ -37,9 +37,7 @@ export default function RegisterScreen() {
     setLoading(true);
     try {
       await register(email.trim(), password);
-      // Mail/inbox is the required first screen after login/registration
-      // (see app/index.tsx and (main)/index.tsx for the same redirect).
-      router.replace("/(main)/emails");
+      router.replace("/(main)/applications");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Something went wrong. Please try again.");
     } finally {
