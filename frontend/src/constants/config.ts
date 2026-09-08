@@ -8,10 +8,10 @@ function defaultApiUrl(): string {
 
   // 2. Agar .env nahi milega toh Local Testing ke liye fallback karega
   if (Platform.OS === "android") {
-    return "http://10.0.2.2:5000/api";
+    return "http://10.0.2.2:5000";
   }
 
-  return "http://localhost:5000/api";
+  return "http://localhost:5000";
 }
 
 export const API_BASE_URL = defaultApiUrl();

@@ -1,8 +1,8 @@
 // Reads replies to sent applications back from the user's own inbox via
-// IMAP, and stores them as inbound email_messages. Runs on-demand (triggered
-// by the app, e.g. pull-to-refresh on the inbox screen or a "Check for
-// replies" button) rather than as a background job, since this backend has
-// no persistent worker process.
+// IMAP, and stores them as inbound email_messages. Called both on-demand
+// (pull-to-refresh / "Check for replies" button, via emailController.js)
+// and from a periodic background sweep (see services/replyNotifier.js),
+// since this backend has no separate persistent worker process of its own.
 const { ImapFlow } = require("imapflow");
 const db = require("../config/db");
 
@@ -48,18 +48,28 @@ async function checkReplies(userId, smtpConfig) {
     );
   }
 
-  // Only addresses we've actually mailed - nothing else in the inbox is relevant.
+  // Only addresses we've actually mailed - nothing else in the inbox is
+  // relevant. Company/job name are pulled in here too (rather than looked
+  // up later) so callers can build a "X replied" notification without a
+  // second round trip.
   const sentTo = await db.query(
-    `SELECT DISTINCT recipient_email, id AS application_id
-     FROM applications
-     WHERE user_id = $1 AND recipient_email IS NOT NULL
-       AND status IN ('sent', 'replied', 'interview', 'rejected')`,
+    `SELECT DISTINCT a.recipient_email, a.id AS application_id, c.name AS company_name, j.title AS job_title
+     FROM applications a
+     LEFT JOIN companies c ON c.id = a.company_id
+     LEFT JOIN jobs j ON j.id = a.job_id
+     WHERE a.user_id = $1 AND a.recipient_email IS NOT NULL
+       AND a.status IN ('sent', 'replied', 'interview', 'rejected')`,
     [userId]
   );
   if (sentTo.rows.length === 0) {
-    return { newReplies: 0 };
+    return { newReplies: 0, replies: [] };
   }
-  const addressToApp = new Map(sentTo.rows.map((r) => [r.recipient_email.toLowerCase(), r.application_id]));
+  const addressToApp = new Map(
+    sentTo.rows.map((r) => [
+      r.recipient_email.toLowerCase(),
+      { applicationId: r.application_id, companyName: r.company_name, jobTitle: r.job_title },
+    ])
+  );
 
   const client = new ImapFlow({
     host: imapConfig.host,
@@ -70,6 +80,7 @@ async function checkReplies(userId, smtpConfig) {
   });
 
   let newReplies = 0;
+  const replies = []; // { applicationId, companyName, jobTitle, subject } - for push notifications
 
   await client.connect();
   try {
@@ -80,7 +91,8 @@ async function checkReplies(userId, smtpConfig) {
       const since = new Date();
       since.setDate(since.getDate() - 30);
 
-      for (const [fromAddress, applicationId] of addressToApp) {
+      for (const [fromAddress, appInfo] of addressToApp) {
+        const { applicationId, companyName, jobTitle } = appInfo;
         const uids = await client.search({ from: fromAddress, since }, { uid: true });
         if (!uids || uids.length === 0) continue;
 
@@ -103,6 +115,7 @@ async function checkReplies(userId, smtpConfig) {
 
           if (inserted.rows.length > 0) {
             newReplies += 1;
+            replies.push({ applicationId, companyName, jobTitle, subject });
             // Don't downgrade a status the user has already moved forward
             // manually (e.g. they marked it "interview") back to "replied".
             await db.query(
@@ -123,7 +136,7 @@ async function checkReplies(userId, smtpConfig) {
     await client.logout().catch(() => client.close());
   }
 
-  return { newReplies };
+  return { newReplies, replies };
 }
 
 module.exports = { checkReplies, resolveImapConfig };

@@ -18,15 +18,24 @@ export function listCompanies() {
 
 export type DiscoverResult = { success: boolean; inserted: number; found?: number; message: string };
 export type IndustryFocus = "it" | "management" | "any";
+export type Geo = { lat: number; lon: number; displayName: string };
 
-// Geocodes `location` (Nominatim) then finds nearby businesses with a
-// website (Overpass), saving new ones to this user's companies list.
-// `industry` steers which kind of businesses to look for (see
-// overpassService.js on the backend for the exact OSM tags used).
-export function discoverCompanies(location: string, limit: number, industry: IndustryFocus = "any") {
+// Finds nearby businesses with a website (Overpass) around `location`,
+// saving new ones to this user's companies list. `industry` steers which
+// kind of businesses to look for (see overpassService.js on the backend for
+// the exact OSM tags used).
+//
+// `geo`, when provided, is a lat/lon already resolved on-device (see
+// geocodeService.ts) - the backend skips its own Nominatim/Photon geocoding
+// step and uses these coordinates directly. This is what avoids OSM's
+// public geocoders blocking the backend's hosting-provider IP with a 403:
+// the phone's ordinary network IP does the geocoding instead. If `geo` is
+// omitted, the backend falls back to geocoding `location` itself (older
+// app builds still work the same as before).
+export function discoverCompanies(location: string, limit: number, industry: IndustryFocus = "any", geo?: Geo | null) {
   return apiRequest<DiscoverResult>("/api/companies/discover", {
     method: "POST",
-    body: { location, limit, industry },
+    body: geo ? { location, limit, industry, lat: geo.lat, lon: geo.lon, displayName: geo.displayName } : { location, limit, industry },
   });
 }
 

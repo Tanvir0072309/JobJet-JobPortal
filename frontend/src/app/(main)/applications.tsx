@@ -13,19 +13,28 @@ import {
   type Application,
 } from "../../services/applicationsService";
 import { ApiError } from "../../services/api";
+import { getCached, setCached } from "../../utils/screenCache";
 import { colors, spacing, typography } from "../../constants/jobjetTheme";
+
+const CACHE_KEY = "applications:data";
+type CachedData = { summary: ApplicationSummary | null; applications: Application[]; unreadReplies: any[] };
 
 export default function ApplicationsScreen() {
   const router = useRouter();
+  const cached = getCached<CachedData>(CACHE_KEY);
 
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(cached === undefined);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
-  const [summary, setSummary] = useState<ApplicationSummary | null>(null);
-  const [applications, setApplications] = useState<Application[]>([]);
-  const [unreadReplies, setUnreadReplies] = useState<any[]>([]);
+  const [summary, setSummary] = useState<ApplicationSummary | null>(cached?.summary ?? null);
+  const [applications, setApplications] = useState<Application[]>(cached?.applications ?? []);
+  const [unreadReplies, setUnreadReplies] = useState<any[]>(cached?.unreadReplies ?? []);
 
+  // This screen fully remounts every time you switch away from and back to
+  // the Applications tab (see screenCache.ts) - the cache above just lets
+  // that remount show last-known data instantly instead of a spinner while
+  // this refetch (still run on every focus, as before) completes quietly.
   const loadData = useCallback(async () => {
     setError(null);
     try {
@@ -37,6 +46,7 @@ export default function ApplicationsScreen() {
       setSummary(summaryRes.summary);
       setApplications(appsRes.applications);
       setUnreadReplies(repliesRes.replies);
+      setCached(CACHE_KEY, { summary: summaryRes.summary, applications: appsRes.applications, unreadReplies: repliesRes.replies });
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Couldn't load your applications.");
     } finally {

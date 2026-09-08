@@ -1,7 +1,8 @@
-import React from "react";
-import { Stack } from "expo-router";
+import React, { useEffect, useRef } from "react";
+import { Stack, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import * as Notifications from "expo-notifications";
 import { AuthProvider } from "../context/AuthContext";
 
 // Root layout: no bottom tabs, no theme-driven dark mode switching (JobJet is
@@ -15,6 +16,27 @@ import { AuthProvider } from "../context/AuthContext";
 // because the app background is pure white — left on "auto"/default it was
 // rendering white icons/time on a white bar, making them invisible.
 export default function RootLayout() {
+  const router = useRouter();
+  const responseListener = useRef<ReturnType<typeof Notifications.addNotificationResponseReceivedListener> | null>(
+    null
+  );
+
+  useEffect(() => {
+    // Tapping a "X replied" push notification (foreground, background, or
+    // from a killed state) should open that application's email thread
+    // directly, instead of just opening the app to whatever screen it was
+    // last on. data.applicationId is set in backend/src/services/replyNotifier.js.
+    responseListener.current = Notifications.addNotificationResponseReceivedListener((response) => {
+      const applicationId = response.notification.request.content.data?.applicationId;
+      if (applicationId) {
+        router.push(`/(main)/emails/${applicationId}`);
+      }
+    });
+    return () => {
+      responseListener.current?.remove();
+    };
+  }, [router]);
+
   return (
     <SafeAreaProvider>
       <AuthProvider>

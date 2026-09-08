@@ -3,6 +3,7 @@ const {
   listApiCredentials,
   saveApiCredential,
   deleteApiCredential,
+  savePushToken,
   getApplicationSettings,
   updateApplicationSettings,
 } = require("../controllers/settingsController");
@@ -17,5 +18,7 @@ router.delete("/api-credentials/:provider", deleteApiCredential);
 
 router.get("/application", getApplicationSettings);
 router.put("/application", updateApplicationSettings);
+
+router.put("/push-token", savePushToken);
 
 module.exports = router;

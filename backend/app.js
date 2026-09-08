@@ -11,8 +11,15 @@ const companiesRoutes = require("./src/routes/companiesRoutes");
 const jobsRoutes = require("./src/routes/jobsRoutes");
 const applicationsRoutes = require("./src/routes/applicationsRoutes");
 const emailRoutes = require("./src/routes/emailRoutes");
+const { startReplyPolling } = require("./src/services/replyNotifier");
 
 const app = express();
+
+// Periodically checks every user's inbox for new company replies and pushes
+// a notification when one shows up, even if they haven't opened the app
+// (see replyNotifier.js for how/why - this backend has no separate worker
+// process, so it's just a setInterval on the same long-running server).
+startReplyPolling();
 
 app.use(cors({ origin: env.corsOrigin }));
 app.use(express.json());

@@ -25,6 +25,25 @@ export function setDefaultDocument(id: string) {
   return apiRequest(`/api/documents/${id}/default`, { method: "PATCH" });
 }
 
+// Android's content-provider file picker frequently returns an empty or
+// generic mimeType even for a perfectly valid file - guess from the
+// extension so the backend's format check (which also has its own
+// extension fallback) has the best chance of seeing something concrete.
+const EXTENSION_TO_MIME: Record<string, string> = {
+  pdf: "application/pdf",
+  doc: "application/msword",
+  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+};
+
+function resolveMimeType(name: string, mimeType?: string) {
+  if (mimeType && mimeType !== "application/octet-stream") return mimeType;
+  const ext = name.split(".").pop()?.toLowerCase() || "";
+  return EXTENSION_TO_MIME[ext] || mimeType || "application/octet-stream";
+}
+
 // multer expects real multipart/form-data - built manually here since the
 // file comes from expo-document-picker as a { uri, name, mimeType } object,
 // not a browser File instance.
@@ -33,7 +52,7 @@ export async function uploadDocument(file: { uri: string; name: string; mimeType
   formData.append("file", {
     uri: file.uri,
     name: file.name,
-    type: file.mimeType || "application/octet-stream",
+    type: resolveMimeType(file.name, file.mimeType),
   } as any);
   formData.append("document_type", documentType);
   formData.append("name", file.name);

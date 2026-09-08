@@ -1,7 +1,7 @@
 const db = require("../config/db");
 const asyncHandler = require("../utils/asyncHandler");
 const { getCredential } = require("../utils/credentials");
-const hunterService = require("../services/hunterService");
+const tombaService = require("../services/tombaService");
 const groqService = require("../services/groqService");
 const mailerService = require("../services/mailerService");
 
@@ -188,7 +188,7 @@ const generateWithAI = asyncHandler(async (req, res) => {
 
 // The full "one-click apply" pipeline for N selected companies, triggered by
 // a single request from the frontend. Per company (never more than once
-// each, and only when not already cached): Hunter finds the contact email,
+// each, and only when not already cached): Tomba finds the contact email,
 // Groq writes the email, then it's sent via the user's configured SMTP
 // account with their default documents attached.
 const applyToCompanies = asyncHandler(async (req, res) => {
@@ -197,9 +197,9 @@ const applyToCompanies = asyncHandler(async (req, res) => {
     return res.status(400).json({ success: false, message: "Select at least one company." });
   }
 
-  const [groqKey, hunterKey, smtpRaw] = await Promise.all([
+  const [groqKey, tombaRaw, smtpRaw] = await Promise.all([
     getCredential(req.user.id, "groq"),
-    getCredential(req.user.id, "hunter"),
+    getCredential(req.user.id, "tomba"),
     getCredential(req.user.id, "smtp"),
   ]);
 
@@ -208,11 +208,12 @@ const applyToCompanies = asyncHandler(async (req, res) => {
       .status(400)
       .json({ success: false, code: "GROQ_NOT_CONFIGURED", message: "Add your Groq API key in Settings first." });
   }
-  if (!hunterKey) {
+  if (!tombaRaw) {
     return res
       .status(400)
-      .json({ success: false, code: "HUNTER_NOT_CONFIGURED", message: "Add your Hunter API key in Settings first." });
+      .json({ success: false, code: "TOMBA_NOT_CONFIGURED", message: "Add your Tomba API key/secret in Settings first." });
   }
+  const tombaCredential = JSON.parse(tombaRaw);
   if (!smtpRaw) {
     return res.status(400).json({
       success: false,
@@ -249,17 +250,17 @@ const applyToCompanies = asyncHandler(async (req, res) => {
         continue;
       }
 
-      // Hunter is only called when we don't already have a saved contact.
+      // Tomba is only called when we don't already have a saved contact.
       let contactEmail = company.contacts?.[0]?.email || null;
       if (!contactEmail && company.website) {
-        const domain = hunterService.extractDomain(company.website);
-        const hunterData = await hunterService.domainSearch(domain, hunterKey);
-        const best = hunterService.pickBestContact(hunterData);
+        const domain = tombaService.extractDomain(company.website);
+        const tombaData = await tombaService.domainSearch(domain, tombaCredential);
+        const best = tombaService.pickBestContact(tombaData);
         if (best) {
           contactEmail = best.email;
           await db.query(
             `INSERT INTO company_contacts (company_id, user_id, email, contact_type, confidence, source)
-             VALUES ($1, $2, $3, $4, $5, 'hunter')`,
+             VALUES ($1, $2, $3, $4, $5, 'tomba')`,
             [company.id, req.user.id, best.email, best.type, best.confidence]
           );
         }

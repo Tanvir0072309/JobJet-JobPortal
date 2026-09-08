@@ -13,6 +13,15 @@ export function getAuthToken() {
   return authToken;
 }
 
+// Lets AuthContext know when the backend has rejected the current token
+// (expired/invalid JWT) so it can clear local state and send the user back
+// to the login screen instead of every screen just silently failing.
+let onUnauthorized: (() => void) | null = null;
+
+export function setUnauthorizedHandler(handler: (() => void) | null) {
+  onUnauthorized = handler;
+}
+
 export class ApiError extends Error {
   status: number;
   code?: string;
@@ -60,6 +69,11 @@ export async function apiRequest<T = any>(path: string, options: RequestOptions 
   }
 
   if (!response.ok) {
+    if (response.status === 401 && authToken && onUnauthorized) {
+      // Don't fire for the login/register calls themselves (no token set
+      // yet at that point) - only for a session that just went stale.
+      onUnauthorized();
+    }
     throw new ApiError(
       data?.message || `Request failed with status ${response.status}`,
       response.status,

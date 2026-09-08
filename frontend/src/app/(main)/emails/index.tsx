@@ -6,7 +6,10 @@ import { EmptyState } from "../../../components/EmptyState";
 import { LoadingState, ErrorState } from "../../../components/LoadingState";
 import { listInbox, checkReplies, type InboxItem } from "../../../services/emailsService";
 import { ApiError } from "../../../services/api";
+import { getCached, setCached } from "../../../utils/screenCache";
 import { colors, spacing, typography } from "../../../constants/jobjetTheme";
+
+const CACHE_KEY = "inbox:items";
 
 function initials(name: string) {
   return name.trim().charAt(0).toUpperCase() || "?";
@@ -24,18 +27,24 @@ function formatDate(value: string | null) {
 
 export default function EmailsInboxScreen() {
   const router = useRouter();
-  const [loading, setLoading] = useState(true);
+  const cachedItems = getCached<InboxItem[]>(CACHE_KEY);
+  const [loading, setLoading] = useState(cachedItems === undefined);
   const [refreshing, setRefreshing] = useState(false);
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [checkNotice, setCheckNotice] = useState<string | null>(null);
-  const [items, setItems] = useState<InboxItem[]>([]);
+  const [items, setItems] = useState<InboxItem[]>(cachedItems || []);
 
+  // Note: this screen fully remounts every time you leave and come back to
+  // the Mail tab (see screenCache.ts for why), so `load()` runs again on
+  // every focus regardless of the cache - the cache only controls whether
+  // we show the spinner or last-known data while that refetch is in flight.
   const load = useCallback(async () => {
     setError(null);
     try {
       const inbox = await listInbox();
       setItems(inbox);
+      setCached(CACHE_KEY, inbox);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Couldn't load your inbox.");
     } finally {

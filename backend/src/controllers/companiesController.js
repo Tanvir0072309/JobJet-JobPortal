@@ -18,11 +18,11 @@ const listCompanies = asyncHandler(async (req, res) => {
 
 // Location -> companies pipeline: geocode the location with Nominatim, pull
 // nearby businesses with a website tag from Overpass, save them as this
-// user's companies. Contact-email lookup (Hunter) and email generation/send
+// user's companies. Contact-email lookup (Tomba) and email generation/send
 // (Groq/SMTP) happen later, lazily, in applicationsController - this step
 // only needs to get a name + website into the companies table.
 const discoverCompanies = asyncHandler(async (req, res) => {
-  const { location, limit, industry } = req.body;
+  const { location, limit, industry, lat, lon, displayName } = req.body;
 
   if (!location || typeof location !== "string") {
     return res.status(400).json({ success: false, message: "A location is required." });
@@ -30,23 +30,37 @@ const discoverCompanies = asyncHandler(async (req, res) => {
   const searchLimit = Math.min(Math.max(Number(limit) || 20, 1), 50);
   const industryFocus = ["it", "management", "any"].includes(industry) ? industry : "any";
 
+  // OSM's public geocoders (Nominatim, and its Photon fallback) commonly
+  // block requests from shared hosting-provider IPs outright, independent
+  // of anything about the request itself - that's what was showing up here
+  // as "geocoding failed (403)". The frontend now geocodes on-device first
+  // (an ordinary phone network IP, not a blocked one) and sends the
+  // resulting lat/lon straight through, skipping this server-side geocode
+  // step entirely. We only fall back to geocoding here ourselves - and
+  // still risk the same block - when the client couldn't do it (e.g. an
+  // older app build, or the on-device geocode itself failed).
   let geo;
-  try {
-    geo = await overpassService.geocodeLocation(location.trim());
-  } catch (err) {
-    return res.status(502).json({
-      success: false,
-      code: "GEOCODE_FAILED",
-      message: `Could not look up that location right now: ${err.message}`,
-    });
-  }
+  const hasClientGeo = typeof lat === "number" && typeof lon === "number" && !Number.isNaN(lat) && !Number.isNaN(lon);
+  if (hasClientGeo) {
+    geo = { lat, lon, displayName: typeof displayName === "string" && displayName ? displayName : location.trim() };
+  } else {
+    try {
+      geo = await overpassService.geocodeLocation(location.trim());
+    } catch (err) {
+      return res.status(502).json({
+        success: false,
+        code: "GEOCODE_FAILED",
+        message: `Could not look up that location right now: ${err.message}`,
+      });
+    }
 
-  if (!geo) {
-    return res.status(404).json({
-      success: false,
-      code: "LOCATION_NOT_FOUND",
-      message: `Couldn't find "${location}" - try a more specific place name (e.g. add city/state).`,
-    });
+    if (!geo) {
+      return res.status(404).json({
+        success: false,
+        code: "LOCATION_NOT_FOUND",
+        message: `Couldn't find "${location}" - try a more specific place name (e.g. add city/state).`,
+      });
+    }
   }
 
   let found;

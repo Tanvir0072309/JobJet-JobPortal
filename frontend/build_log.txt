@@ -1,0 +1,28 @@
+env: load .env
+env: export EXPO_PUBLIC_API_URL
+Using src/app as the root directory for Expo Router.
+Starting Metro Bundler
+
+warning: Bundler cache is empty, rebuilding (this may take a minute)
+Android Bundling failed 8069ms node_modules/expo-router/entry.js (1249 modules)
+
+Error: Unable to resolve module ../../context/constants/jobjetTheme from /home/tanvir/Documents/Tanvir/jobjet/frontend/src/app/(main)/_layout.tsx: 
+
+None of these files exist:
+  * src/context/constants/jobjetTheme(.android.ts|.native.ts|.ts|.android.tsx|.native.tsx|.tsx|.android.mjs|.native.mjs|.mjs|.android.js|.native.js|.js|.android.jsx|.native.jsx|.jsx|.android.json|.native.json|.json|.android.cjs|.native.cjs|.cjs|.android.scss|.native.scss|.scss|.android.sass|.native.sass|.sass|.android.css|.native.css|.css)
+  * src/context/constants/jobjetTheme
+[0m [90m  6 |[39m [36mimport[39m { [33mBottomTabBar[39m } [36mfrom[39m [32m"../../components/BottomTabBar"[39m[33m;[39m
+ [90m  7 |[39m [36mimport[39m { [33mLoadingState[39m } [36mfrom[39m [32m"../../components/LoadingState"[39m[33m;[39m
+[31m[1m>[22m[39m[90m  8 |[39m [36mimport[39m { colors } [36mfrom[39m [32m"../../context/constants/jobjetTheme"[39m[33m;[39m
+ [90m    |[39m                         [31m[1m^[22m[39m
+ [90m  9 |[39m
+ [90m 10 |[39m [36mexport[39m [36mdefault[39m [36mfunction[39m [33mMainLayout[39m() {
+ [90m 11 |[39m   [36mconst[39m { isAuthenticated[33m,[39m isBootstrapping } [33m=[39m useAuth()[33m;[39m[0m
+
+Import stack:
+
+ src/app/(main)/_layout.tsx
+ | import "../../context/constants/jobjetTheme"
+
+ src/app (require.context)
+

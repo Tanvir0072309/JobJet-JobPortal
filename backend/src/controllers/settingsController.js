@@ -2,7 +2,7 @@ const db = require("../config/db");
 const asyncHandler = require("../utils/asyncHandler");
 const { encrypt } = require("../utils/crypto");
 
-const ALLOWED_PROVIDERS = ["groq", "hunter", "smtp"];
+const ALLOWED_PROVIDERS = ["groq", "tomba", "smtp"];
 
 // GET /api/settings/api-credentials
 // Returns only whether each provider is configured + a masked hint - never the real key.
@@ -28,7 +28,7 @@ const listApiCredentials = asyncHandler(async (req, res) => {
 });
 
 const saveApiCredential = asyncHandler(async (req, res) => {
-  const { provider, apiKey, smtpConfig } = req.body;
+  const { provider, apiKey, smtpConfig, tombaKey, tombaSecret } = req.body;
 
   if (!ALLOWED_PROVIDERS.includes(provider)) {
     return res.status(400).json({ success: false, message: `Unsupported provider: ${provider}` });
@@ -37,7 +37,18 @@ const saveApiCredential = asyncHandler(async (req, res) => {
   let secretToStore;
   let lastFour;
 
-  if (provider === "smtp") {
+  if (provider === "tomba") {
+    // Tomba (like Hunter's replacement here) authenticates with a key +
+    // secret pair rather than a single API key, so it's stored as JSON the
+    // same way the SMTP config is.
+    if (!tombaKey || !tombaSecret) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Both the Tomba API key and secret are required." });
+    }
+    secretToStore = JSON.stringify({ key: tombaKey.trim(), secret: tombaSecret.trim() });
+    lastFour = tombaKey.trim().slice(-4);
+  } else if (provider === "smtp") {
     if (!smtpConfig || !smtpConfig.host || !smtpConfig.user || !smtpConfig.pass) {
       return res
         .status(400)
@@ -84,6 +95,24 @@ const deleteApiCredential = asyncHandler(async (req, res) => {
     provider,
   ]);
   res.json({ success: true, message: `${provider} API key removed.` });
+});
+
+// Registers (or clears) this device's Expo push token, used to notify the
+// user when a company replies to one of their applications (see
+// services/replyNotifier.js). Called from the app right after login/launch.
+const savePushToken = asyncHandler(async (req, res) => {
+  const { pushToken } = req.body;
+
+  if (pushToken !== null && (typeof pushToken !== "string" || pushToken.trim().length === 0)) {
+    return res.status(400).json({ success: false, message: "A valid pushToken (or null to clear) is required." });
+  }
+
+  await db.query("UPDATE users SET push_token = $1, updated_at = now() WHERE id = $2", [
+    pushToken,
+    req.user.id,
+  ]);
+
+  res.json({ success: true, message: pushToken ? "Push token saved." : "Push token cleared." });
 });
 
 const getApplicationSettings = asyncHandler(async (req, res) => {
@@ -135,6 +164,7 @@ module.exports = {
   listApiCredentials,
   saveApiCredential,
   deleteApiCredential,
+  savePushToken,
   getApplicationSettings,
   updateApplicationSettings,
 };

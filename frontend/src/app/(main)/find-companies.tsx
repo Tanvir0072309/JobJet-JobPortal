@@ -7,10 +7,14 @@ import { Button } from "../../components/Button";
 import { EmptyState } from "../../components/EmptyState";
 import { LoadingState } from "../../components/LoadingState";
 import { listCompanies, discoverCompanies, type Company, type IndustryFocus } from "../../services/companiesService";
+import { geocodeOnDevice } from "../../services/geocodeService";
 import { getProfile } from "../../services/profileService";
 import { applyToCompanies, type ApplyResult } from "../../services/applicationsService";
 import { ApiError } from "../../services/api";
+import { getCached, setCached } from "../../utils/screenCache";
 import { colors, spacing, typography, radius } from "../../constants/jobjetTheme";
+
+const CACHE_KEY = "companies:list";
 
 const FILTERS = ["Any", "Remote", "Hybrid", "On-site"] as const;
 const INDUSTRY_OPTIONS: { value: IndustryFocus; label: string }[] = [
@@ -27,19 +31,25 @@ export default function FindCompaniesScreen() {
   const [filter, setFilter] = useState<(typeof FILTERS)[number]>("Any");
   const [industry, setIndustry] = useState<IndustryFocus>("any");
 
-  const [loading, setLoading] = useState(true);
+  const cachedCompanies = getCached<Company[]>(CACHE_KEY);
+  const [loading, setLoading] = useState(cachedCompanies === undefined);
   const [searching, setSearching] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
-  const [companies, setCompanies] = useState<Company[]>([]);
+  const [companies, setCompanies] = useState<Company[]>(cachedCompanies || []);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [aiNotice, setAiNotice] = useState<string | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [applyResults, setApplyResults] = useState<ApplyResult[] | null>(null);
 
+  // This screen fully remounts every time you switch away from and back to
+  // the Find Jobs tab (see screenCache.ts) - the cache above just lets that
+  // remount show last-known data instantly instead of a spinner while this
+  // refetch (still run on every focus, as before) completes quietly.
   const loadCompanies = useCallback(async () => {
     try {
       const res = await listCompanies();
       setCompanies(res.companies);
+      setCached(CACHE_KEY, res.companies);
     } catch (err) {
       setNotice(err instanceof ApiError ? err.message : "Couldn't load companies.");
     } finally {
@@ -76,7 +86,12 @@ export default function FindCompaniesScreen() {
     setSearching(true);
     setNotice(null);
     try {
-      const res = await discoverCompanies(location.trim(), limit, industry);
+      // Geocode on-device first (see geocodeService.ts): OSM's public
+      // geocoders commonly block the backend's hosting-provider IP with a
+      // 403, but not an ordinary phone network IP. Falls back to letting
+      // the backend geocode the raw location string itself if this fails.
+      const geo = await geocodeOnDevice(location.trim());
+      const res = await discoverCompanies(location.trim(), limit, industry, geo);
       setNotice(res.message);
       await loadCompanies();
     } catch (err) {
@@ -99,7 +114,7 @@ export default function FindCompaniesScreen() {
   const clearSelection = () => setSelected(new Set());
 
   // A single tap here fires ONE request no matter how many companies are
-  // selected - the backend loops internally, calling Hunter/Groq once per
+  // selected - the backend loops internally, calling Tomba/Groq once per
   // company (only when needed), then sends each email with the attached
   // default resume/documents.
   const handleApplyWithAI = async () => {

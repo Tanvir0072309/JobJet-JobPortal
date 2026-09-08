@@ -1,7 +1,7 @@
 const db = require("../config/db");
 const asyncHandler = require("../utils/asyncHandler");
 const { getCredential } = require("../utils/credentials");
-const imapService = require("../services/imapService");
+const replyNotifier = require("../services/replyNotifier");
 
 // Unread replies, surfaced at the top of the Applications page.
 const listUnreadReplies = asyncHandler(async (req, res) => {
@@ -41,9 +41,12 @@ const markThreadRead = asyncHandler(async (req, res) => {
   res.json({ success: true, message: "Thread marked as read." });
 });
 
-// Pulls new replies from the user's actual inbox via IMAP and stores them.
-// Triggered on-demand from the app (pull-to-refresh / a "Check replies"
-// button) - there is no background job running this automatically.
+// Pulls new replies from the user's actual inbox via IMAP, stores them, and
+// pushes a notification to the user's device for each new one. Triggered
+// on-demand from the app (pull-to-refresh / a "Check replies" button); the
+// same logic also runs periodically in the background (see
+// replyNotifier.startReplyPolling, started from app.js) so a notification
+// can arrive even without the app being open.
 const checkReplies = asyncHandler(async (req, res) => {
   const smtpRaw = await getCredential(req.user.id, "smtp");
   if (!smtpRaw) {
@@ -53,10 +56,9 @@ const checkReplies = asyncHandler(async (req, res) => {
       message: "Add your sending email account in Settings first - replies are checked from that same inbox.",
     });
   }
-  const smtpConfig = JSON.parse(smtpRaw);
 
   try {
-    const result = await imapService.checkReplies(req.user.id, smtpConfig);
+    const result = await replyNotifier.checkRepliesAndNotify(req.user.id);
     res.json({ success: true, ...result });
   } catch (err) {
     res.status(502).json({ success: false, code: "IMAP_CHECK_FAILED", message: err.message });

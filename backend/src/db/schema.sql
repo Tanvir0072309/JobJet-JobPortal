@@ -12,10 +12,17 @@ CREATE TABLE IF NOT EXISTS users (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   email VARCHAR(255) UNIQUE NOT NULL,
   password_hash TEXT NOT NULL,
+  -- Expo push token for this device (e.g. "ExponentPushToken[...]"), used to
+  -- notify the user when a company replies to one of their applications.
+  -- One token per user for now (last device to register wins) - good enough
+  -- since this is a single-device personal-use app.
+  push_token TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_users_email ON users (email);
+-- Safe to re-run against a database created before push_token existed.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS push_token TEXT;
 
 CREATE TABLE IF NOT EXISTS password_reset_tokens (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -82,7 +89,7 @@ CREATE INDEX IF NOT EXISTS idx_documents_user ON documents (user_id);
 CREATE TABLE IF NOT EXISTS api_credentials (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES users (id) ON DELETE CASCADE,
-  provider VARCHAR(50) NOT NULL, -- 'groq' | 'hunter' | 'smtp' (JSON: host/port/user/pass/fromName) | future providers
+  provider VARCHAR(50) NOT NULL, -- 'groq' | 'tomba' (JSON: key/secret) | 'smtp' (JSON: host/port/user/pass/fromName) | future providers
   encrypted_key TEXT NOT NULL,
   key_iv TEXT NOT NULL,
   key_auth_tag TEXT NOT NULL,

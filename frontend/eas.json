@@ -8,12 +8,17 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://jobjet-jobportal.onrender.com/api"
+        "EXPO_PUBLIC_API_URL": "https://jobjet-jobportal.onrender.com",
+        "EXPO_PUBLIC_USE_RN_FETCH": "1"
       }
     },
     "production": {
       "android": {
         "buildType": "app-bundle"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://jobjet-jobportal.onrender.com",
+        "EXPO_PUBLIC_USE_RN_FETCH": "1"
       }
     }
   }

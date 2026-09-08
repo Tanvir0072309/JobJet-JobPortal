@@ -31,6 +31,23 @@
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 160
         }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "enableProguardInReleaseBuilds": true,
+            "enableShrinkResourcesInReleaseBuilds": true
+          }
+        }
+      ],
+      "expo-secure-store",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/icon.png",
+          "color": "#FFFFFF"
+        }
       ]
     ],
     "experiments": {
@@ -38,7 +55,7 @@
     },
     "extra": {
       "router": {},
-      "apiUrl": "https://jobjet-jobportal.onrender.com/api",
+      "apiUrl": "https://jobjet-jobportal.onrender.com",
       "eas": {
         "projectId": "5f55e381-44fe-4010-829f-8c7883f003d5"
       }

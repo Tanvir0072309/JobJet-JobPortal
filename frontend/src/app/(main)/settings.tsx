@@ -8,21 +8,27 @@ import { LoadingState, ErrorState } from "../../components/LoadingState";
 import { useAuth } from "../../context/AuthContext";
 import * as settingsService from "../../services/settingsService";
 import { ApiError } from "../../services/api";
+import { getCached, setCached } from "../../utils/screenCache";
 import { colors, spacing, typography, radius } from "../../constants/jobjetTheme";
 
 const WORK_MODES = ["remote", "hybrid", "onsite", "any"] as const;
 const TONES = ["professional", "friendly", "concise", "enthusiastic"] as const;
 
+const CACHE_KEY = "settings:data";
+type CachedSettings = { credentials: Record<string, any>; appSettings: any };
+
 export default function SettingsScreen() {
   const router = useRouter();
   const { user, logout } = useAuth();
+  const cached = getCached<CachedSettings>(CACHE_KEY);
 
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(cached === undefined);
   const [error, setError] = useState<string | null>(null);
 
-  const [credentials, setCredentials] = useState<Record<string, any>>({});
+  const [credentials, setCredentials] = useState<Record<string, any>>(cached?.credentials ?? {});
   const [groqKey, setGroqKey] = useState("");
-  const [hunterKey, setHunterKey] = useState("");
+  const [tombaKey, setTombaKey] = useState("");
+  const [tombaSecret, setTombaSecret] = useState("");
   const [savingProvider, setSavingProvider] = useState<string | null>(null);
 
   const [smtpHost, setSmtpHost] = useState("");
@@ -34,10 +40,14 @@ export default function SettingsScreen() {
   const [imapPort, setImapPort] = useState("");
   const [savingSmtp, setSavingSmtp] = useState(false);
 
-  const [appSettings, setAppSettings] = useState<any>({});
+  const [appSettings, setAppSettings] = useState<any>(cached?.appSettings ?? {});
   const [savingSettings, setSavingSettings] = useState(false);
   const [settingsMessage, setSettingsMessage] = useState<string | null>(null);
 
+  // This screen fully remounts every time you switch away from and back to
+  // the Settings tab (see screenCache.ts) - the cache above just lets that
+  // remount show last-known data instantly instead of a spinner while this
+  // refetch (still run on every focus, as before) completes quietly.
   const load = useCallback(async () => {
     try {
       const [credsRes, settingsRes] = await Promise.all([
@@ -46,6 +56,7 @@ export default function SettingsScreen() {
       ]);
       setCredentials(credsRes.credentials);
       setAppSettings(settingsRes.settings || {});
+      setCached(CACHE_KEY, { credentials: credsRes.credentials, appSettings: settingsRes.settings || {} });
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Couldn't load settings.");
     } finally {
@@ -59,14 +70,13 @@ export default function SettingsScreen() {
     }, [load])
   );
 
-  const handleSaveKey = async (provider: "groq" | "hunter") => {
-    const value = provider === "groq" ? groqKey : hunterKey;
+  const handleSaveKey = async (provider: "groq") => {
+    const value = groqKey;
     if (!value.trim()) return;
     setSavingProvider(provider);
     try {
       await settingsService.saveApiCredential(provider, value.trim());
-      if (provider === "groq") setGroqKey("");
-      else setHunterKey("");
+      setGroqKey("");
       await load();
     } catch (err) {
       Alert.alert("Couldn't save key", err instanceof ApiError ? err.message : "Please try again.");
@@ -75,13 +85,31 @@ export default function SettingsScreen() {
     }
   };
 
-  const handleRemoveKey = async (provider: "groq" | "hunter") => {
+  const handleRemoveKey = async (provider: "groq" | "tomba") => {
     setSavingProvider(provider);
     try {
       await settingsService.deleteApiCredential(provider);
       await load();
     } catch (err) {
       Alert.alert("Couldn't remove key", err instanceof ApiError ? err.message : "Please try again.");
+    } finally {
+      setSavingProvider(null);
+    }
+  };
+
+  const handleSaveTomba = async () => {
+    if (!tombaKey.trim() || !tombaSecret.trim()) {
+      Alert.alert("Missing details", "Both the Tomba API key and secret are required.");
+      return;
+    }
+    setSavingProvider("tomba");
+    try {
+      await settingsService.saveTombaCredential(tombaKey.trim(), tombaSecret.trim());
+      setTombaKey("");
+      setTombaSecret("");
+      await load();
+    } catch (err) {
+      Alert.alert("Couldn't save Tomba credentials", err instanceof ApiError ? err.message : "Please try again.");
     } finally {
       setSavingProvider(null);
     }
@@ -173,15 +201,41 @@ export default function SettingsScreen() {
           saving={savingProvider === "groq"}
         />
         <View style={styles.divider} />
-        <CredentialRow
-          label="Hunter API Key"
-          status={credentials.hunter}
-          value={hunterKey}
-          onChangeText={setHunterKey}
-          onSave={() => handleSaveKey("hunter")}
-          onRemove={() => handleRemoveKey("hunter")}
-          saving={savingProvider === "hunter"}
+        <Text style={styles.rowLabel}>Tomba API Key + Secret</Text>
+        {credentials.tomba?.configured ? (
+          <Text style={styles.rowValue}>Configured ({credentials.tomba.maskedKey})</Text>
+        ) : (
+          <Text style={styles.rowValueMuted}>Not configured</Text>
+        )}
+        <Text style={styles.helperNote}>
+          Used to find a company's contact email before applying. Get a free key + secret at tomba.io (25 searches/50
+          verifications per month, no credit card needed) - sign up, then copy both from your Tomba account settings.
+        </Text>
+        <Input
+          value={tombaKey}
+          onChangeText={setTombaKey}
+          placeholder={credentials.tomba?.configured ? "Enter a new key to replace it" : "Tomba API Key (ta_...)"}
+          secureTextEntry
+          autoCapitalize="none"
         />
+        <Input
+          value={tombaSecret}
+          onChangeText={setTombaSecret}
+          placeholder="Tomba API Secret (ts_...)"
+          secureTextEntry
+          autoCapitalize="none"
+        />
+        <View style={styles.credentialActions}>
+          <Button label="Save" onPress={handleSaveTomba} loading={savingProvider === "tomba"} style={{ flex: 1 }} />
+          {credentials.tomba?.configured ? (
+            <Button
+              label="Remove"
+              variant="danger"
+              onPress={() => handleRemoveKey("tomba")}
+              style={{ flex: 1 }}
+            />
+          ) : null}
+        </View>
       </Card>
 
       <Text style={styles.sectionTitle}>Sending Email</Text>

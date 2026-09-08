@@ -1,0 +1,28 @@
+env: load .env
+env: export EXPO_PUBLIC_API_URL
+Using src/app as the root directory for Expo Router.
+Starting Metro Bundler
+
+warning: Bundler cache is empty, rebuilding (this may take a minute)
+Android Bundling failed 7736ms node_modules/expo-router/entry.js (1252 modules)
+
+Error: Unable to resolve module ../../context/constants/jobjetTheme from /home/tanvir/Documents/Tanvir/jobjet/frontend/src/app/(main)/dashboard.tsx: 
+
+None of these files exist:
+  * src/context/constants/jobjetTheme(.android.ts|.native.ts|.ts|.android.tsx|.native.tsx|.tsx|.android.mjs|.native.mjs|.mjs|.android.js|.native.js|.js|.android.jsx|.native.jsx|.jsx|.android.json|.native.json|.json|.android.cjs|.native.cjs|.cjs|.android.scss|.native.scss|.scss|.android.sass|.native.sass|.sass|.android.css|.native.css|.css)
+  * src/context/constants/jobjetTheme
+[0m [90m  8 |[39m [36mimport[39m { listCompanies[33m,[39m type [33mCompany[39m } [36mfrom[39m [32m"../../services/companiesService"[39m[33m;[39m
+ [90m  9 |[39m [36mimport[39m { [33mApiError[39m } [36mfrom[39m [32m"../../services/api"[39m[33m;[39m
+[31m[1m>[22m[39m[90m 10 |[39m [36mimport[39m { colors[33m,[39m spacing[33m,[39m typography } [36mfrom[39m [32m"../../context/constants/jobjetTheme"[39m[33m;[39m
+ [90m    |[39m                                              [31m[1m^[22m[39m
+ [90m 11 |[39m
+ [90m 12 |[39m type [33mActivityItem[39m [33m=[39m { id[33m:[39m string[33m;[39m text[33m:[39m string[33m;[39m timestamp[33m:[39m string }[33m;[39m
+ [90m 13 |[39m[0m
+
+Import stack:
+
+ src/app/(main)/dashboard.tsx
+ | import "../../context/constants/jobjetTheme"
+
+ src/app (require.context)
+
