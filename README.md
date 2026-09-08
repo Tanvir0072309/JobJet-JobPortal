@@ -10,7 +10,7 @@
 
   <br />
 
-  [![Download APK](https://img.shields.io/badge/⚡_Download_Android_APK-3DDC84?style=for-the-badge&logo=android&logoColor=white)]([https://github.com/Tanvir0072309/JobJet-JobPortal/](https://expo.dev/artifacts/eas/fYyjX9xytTncIm2QJ5q6dijUpML-lQ1qXgO3zXN3vaY.apk))
+  [![Download APK](https://img.shields.io/badge/⚡_Download_Android_APK-3DDC84?style=for-the-badge&logo=android&logoColor=white)]((https://expo.dev/artifacts/eas/fYyjX9xytTncIm2QJ5q6dijUpML-lQ1qXgO3zXN3vaY.apk)
   [![Backend Status](https://img.shields.io/badge/API-Live_on_Render-46E3B7?style=for-the-badge&logo=render&logoColor=white)](https://jobjet-jobportal.onrender.com)
 
   <br />
