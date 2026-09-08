@@ -1,195 +1,205 @@
 <div align="center">
 
-  <img src="https://res.cloudinary.com/dat8orrws/image/upload/v1788690254/Gemini_Generated_Image_mc57kzmc57kzmc57.png" alt="JobJet Logo" width="140" style="border-radius: 24px; margin-bottom: 10px;" />
+<img src="https://res.cloudinary.com/dat8orrws/image/upload/v1788690254/Gemini_Generated_Image_mc57kzmc57kzmc57.png" alt="JobJet" width="120" style="border-radius: 28px;" />
 
-  # JobJet
+<h1>JobJet</h1>
 
-  ### AI-Powered Job Application Automation, Right From Your Phone
+<h3>Your job hunt, on autopilot.</h3>
 
-  Find companies near any location, discover a real contact email, let AI draft your application, and send it — all in one flow.
+<p><i>Find companies near any location, land a real contact email, let AI write the pitch, hit send — track the replies from your pocket.</i></p>
 
-  <br />
+<br/>
 
-  [![Download APK](https://img.shields.io/badge/⚡_Download_Android_APK-3DDC84?style=for-the-badge&logo=android&logoColor=white)]((https://expo.dev/artifacts/eas/fYyjX9xytTncIm2QJ5q6dijUpML-lQ1qXgO3zXN3vaY.apk)
-  [![Backend Status](https://img.shields.io/badge/API-Live_on_Render-46E3B7?style=for-the-badge&logo=render&logoColor=white)](https://jobjet-jobportal.onrender.com)
+<a href="https://expo.dev/artifacts/eas/fYyjX9xytTncIm2QJ5q6dijUpML-lQ1qXgO3zXN3vaY.apk">
+  <img src="https://img.shields.io/badge/⚡%20DOWNLOAD%20FOR%20ANDROID-Tap%20to%20get%20the%20APK-0B0F13?style=for-the-badge&logo=android&logoColor=3DDC84&labelColor=0B0F13" alt="Download APK" height="52"/>
+</a>
 
-  <br />
+<br/><br/>
 
-  [![PostgreSQL](https://img.shields.io/badge/Database-Neon.tech-00E599?style=flat-square&logo=postgresql&logoColor=white)](https://neon.tech)
-  [![Expo](https://img.shields.io/badge/Mobile-Expo_React_Native-000020?style=flat-square&logo=expo&logoColor=white)](https://expo.dev)
-  [![NodeJS](https://img.shields.io/badge/Server-Node.js-339933?style=flat-square&logo=nodedotjs&logoColor=white)](https://nodejs.org)
-  [![Groq](https://img.shields.io/badge/AI-Groq-F55036?style=flat-square)](https://groq.com)
-  [![License](https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square)](LICENSE)
+<img src="https://img.shields.io/badge/API-Live_on_Render-46E3B7?style=flat-square&logo=render&logoColor=white" />
+<img src="https://img.shields.io/badge/Database-Neon.tech-00E599?style=flat-square&logo=postgresql&logoColor=white" />
+<img src="https://img.shields.io/badge/Mobile-Expo_React_Native-000020?style=flat-square&logo=expo&logoColor=white" />
+<img src="https://img.shields.io/badge/Server-Node.js-339933?style=flat-square&logo=nodedotjs&logoColor=white" />
+<img src="https://img.shields.io/badge/AI-Groq-F55036?style=flat-square" />
+<img src="https://img.shields.io/badge/License-MIT-blue?style=flat-square" />
 
 </div>
 
-<br />
+<br/>
 
-<details>
-<summary><b>📖 Table of Contents</b></summary>
+<p align="center">
+  <img src="https://user-images.githubusercontent.com/placeholder/divider.svg" width="0" height="0" />
+</p>
 
-- [About The Project](#-about-the-project)
-- [How It Works](#-how-it-works)
-- [Key Features](#-key-features)
-- [Tech Stack](#️-tech-stack)
-- [Quick Download & Install](#-quick-download--install)
-- [Project Structure](#-project-structure)
-- [Getting Started (Local Development)](#-getting-started-local-development)
-- [Environment Variables](#-environment-variables)
-- [Building the Android APK](#-building-the-android-apk)
-- [Roadmap](#-roadmap)
-- [License](#-license)
-
-</details>
-
-<br />
-
-## 🎯 About The Project
-
-**JobJet** takes the repetitive, tedious part of job hunting — finding companies, digging up a real contact, writing a personalized email, sending it, then checking your inbox for replies — and automates the whole chain.
-
-Built as a full-stack mobile app: an **Expo React Native** client talking to a **Node.js / Express** API, backed by **Neon Postgres**, with pluggable third-party integrations for company discovery, contact lookup, AI writing, and email delivery.
-
----
-
-## ⚙️ How It Works
+<div align="center">
 
 ```
-📍 Location  →  🏢 Discover Companies  →  📧 Find Contact Email  →  ✍️ AI Drafts Email  →  📤 Send  →  📥 Track Replies
+  📍  location   →   🏢  discover   →   📇  contact   →   ✍️  AI draft   →   📤  send   →   📥  track
 ```
 
-1. **Discover** — Enter a city/area; JobJet geocodes it and pulls nearby companies with a public website (via OpenStreetMap).
-2. **Find a contact** — For each company, JobJet looks up a real contact email using the [Tomba.io](https://tomba.io) API.
-3. **Draft** — Groq-powered AI writes a personalized application email using your profile, resume, and the company's details.
-4. **Send** — The email goes out from your own SMTP account (Gmail, Outlook, etc.), with your resume/cover letter attached.
-5. **Track** — JobJet checks your inbox (via IMAP) for replies and keeps your application pipeline up to date.
+</div>
 
----
+<br/>
 
-## ✨ Key Features
+## What is this, actually?
 
-| Feature | Description |
-| :--- | :--- |
-| 🔐 **Secure Authentication** | JWT-based sessions, bcrypt-hashed passwords, persisted securely on-device. |
-| 📍 **Location-Based Discovery** | Find real, nearby companies by city/area using free OpenStreetMap data. |
-| 📇 **Contact Finder** | Automatically resolves a company's best contact email via Tomba.io. |
-| 🤖 **AI Application Writer** | Groq-powered LLM drafts a tailored application email per company. |
-| 📎 **Document Manager** | Upload and manage resumes, cover letters, and portfolios (PDF/DOC/DOCX/PNG/JPG). |
-| ✉️ **Bring-Your-Own SMTP** | Send from your own Gmail/Outlook/etc. account — no shared sending infrastructure. |
-| 📊 **Application Tracking** | Dashboard view of sent, replied, interviewing, and rejected applications. |
-| 🔑 **Your Own API Keys** | Every integration (Groq, Tomba, SMTP) is configured with your own free-tier keys, encrypted at rest. |
+Job hunting is 10% writing a good application and 90% mind-numbing repetition — searching for companies, hunting for *someone's* email address, tweaking the same cover letter for the hundredth time, and refreshing your inbox hoping for a reply.
 
----
+**JobJet swallows that whole loop.** Tell it a city. It finds real companies there, finds a real person to email, writes a real application in your voice, sends it, and watches your inbox so you don't have to.
 
-## 🛠️ Tech Stack
+It's a full-stack, self-hosted, bring-your-own-API-keys project — nothing about it depends on a paid backend you don't control.
 
-**Frontend (Mobile App)**
-- React Native + Expo SDK 57, Expo Router (file-based navigation)
-- TypeScript
-- EAS Build for `.apk` / `.aab` production builds
-- `expo-secure-store` for on-device session persistence
+<br/>
 
-**Backend (REST API)**
-- Node.js + Express 5
-- PostgreSQL (hosted on [Neon](https://neon.tech))
-- JWT auth, AES-256-GCM encrypted credential storage
-- Multer (file uploads), Nodemailer (SMTP), ImapFlow (reply tracking)
-- Hosted on [Render](https://render.com)
+## How it flows
 
-**Third-Party Integrations (each configured with your own free-tier key)**
-- [Groq](https://groq.com) — AI email generation
-- [Tomba.io](https://tomba.io) — company contact email lookup
-- OpenStreetMap (Nominatim + Overpass) — location-based company discovery, no key required
+<table>
+<tr>
+<td width="60">📍</td>
+<td><b>Drop a pin</b><br/><sub>Type any city or area. JobJet geocodes it and scans OpenStreetMap for nearby companies that actually have a public website — no fake data, no scraped lead lists.</sub></td>
+</tr>
+<tr>
+<td>📇</td>
+<td><b>Find the human</b><br/><sub>For each company, Tomba.io resolves a real, verifiable contact email — not just a generic <code>info@</code> address.</sub></td>
+</tr>
+<tr>
+<td>✍️</td>
+<td><b>AI writes the pitch</b><br/><sub>Groq's LLM drafts a personalized application using your profile, resume, and that specific company's details. Every email reads like you wrote it.</sub></td>
+</tr>
+<tr>
+<td>📤</td>
+<td><b>You send it, from you</b><br/><sub>Delivered through your own Gmail/Outlook SMTP — never a shared sending server, so nothing ever lands in spam because of someone else's reputation.</sub></td>
+</tr>
+<tr>
+<td>📥</td>
+<td><b>Replies, tracked automatically</b><br/><sub>IMAP quietly checks for responses and updates your pipeline — sent, replied, interviewing, rejected — so your dashboard is always current.</sub></td>
+</tr>
+</table>
 
----
+<br/>
 
-## 📲 Quick Download & Install
+## Why it's built this way
 
-1. Tap **Download Android APK** above, or grab the [latest build directly](https://expo.dev/artifacts/eas/iAtk2TKyDVXBbfdbYKtjdpFRFnGfTcYQ7c0e16s5cSk.apk).
-2. Open the downloaded `.apk` on your phone.
-3. If prompted, enable **"Install from Unknown Sources"** for your browser/file manager.
-4. Launch **JobJet**, create an account, and add your API keys under **Settings**.
+<table>
+<tr><td>🔐</td><td><b>Your keys, your data</b></td><td>Groq, Tomba, and SMTP are all <i>your</i> free-tier credentials, encrypted at rest with AES-256-GCM. Nobody's routing your applications through a shared black box.</td></tr>
+<tr><td>🌍</td><td><b>Zero-cost discovery</b></td><td>Company search runs on OpenStreetMap's free Nominatim + Overpass infrastructure — no maps API bill, ever.</td></tr>
+<tr><td>📎</td><td><b>One place for your documents</b></td><td>Resume, cover letter, portfolio — upload once, JobJet attaches the right ones automatically.</td></tr>
+<tr><td>📊</td><td><b>A pipeline, not a spreadsheet</b></td><td>Every application's status lives in one dashboard instead of a dozen browser tabs and a mental to-do list.</td></tr>
+</table>
 
----
+<br/>
 
-## 📁 Project Structure
+## Under the hood
+
+<table>
+<tr>
+<th align="left">Layer</th>
+<th align="left">Stack</th>
+</tr>
+<tr>
+<td><b>Mobile app</b></td>
+<td>React Native · Expo SDK 57 · Expo Router · TypeScript · <code>expo-secure-store</code> for on-device session storage · EAS Build for production APK/AAB</td>
+</tr>
+<tr>
+<td><b>API</b></td>
+<td>Node.js · Express 5 · PostgreSQL (Neon) · JWT auth · AES-256-GCM encrypted credential vault · Multer · Nodemailer · ImapFlow · hosted on Render</td>
+</tr>
+<tr>
+<td><b>Integrations</b></td>
+<td><a href="https://groq.com">Groq</a> for AI writing · <a href="https://tomba.io">Tomba.io</a> for contact lookup · OpenStreetMap for location intelligence — all bring-your-own-key</td>
+</tr>
+</table>
+
+<br/>
+
+## Get it on your phone
+
+<table>
+<tr>
+<td width="28">1</td><td>Tap the download badge at the top of this page (or <a href="https://expo.dev/artifacts/eas/fYyjX9xytTncIm2QJ5q6dijUpML-lQ1qXgO3zXN3vaY.apk">grab the APK directly</a>).</td>
+</tr>
+<tr>
+<td>2</td><td>Open the downloaded file. Android will ask you to allow installs from this source once — allow it.</td>
+</tr>
+<tr>
+<td>3</td><td>Open JobJet, create an account, and drop your Groq / Tomba / SMTP keys into <b>Settings</b>.</td>
+</tr>
+<tr>
+<td>4</td><td>Search a city under <b>Find Jobs</b> and watch your pipeline fill up.</td>
+</tr>
+</table>
+
+<br/>
+
+## Project layout
 
 ```
 jobjet/
-├── backend/                 # Node.js + Express REST API
-│   ├── src/
-│   │   ├── controllers/     # Route handlers
-│   │   ├── services/        # Groq, Tomba, mailer, IMAP, OSM integrations
-│   │   ├── middleware/       # Auth guard, error handling
-│   │   ├── db/               # Schema + migration script
-│   │   └── utils/            # Crypto, JWT, credential helpers
-│   ├── .env.example
-│   └── server.js
+├── backend/                  Node.js + Express REST API
+│   └── src/
+│       ├── controllers/      Route handlers
+│       ├── services/         Groq · Tomba · mailer · IMAP · OSM discovery
+│       ├── middleware/       Auth guard, error handling
+│       ├── db/                Schema + migrations
+│       └── utils/             Crypto, JWT, credential helpers
 │
-└── frontend/                 # Expo React Native app
-    ├── src/
-    │   ├── app/               # Expo Router screens
-    │   ├── components/        # Shared UI components
-    │   ├── services/          # API client per feature
-    │   └── context/           # Auth context
-    ├── app.json
-    └── eas.json
+└── frontend/                  Expo React Native app
+    └── src/
+        ├── app/                Expo Router screens
+        ├── components/         Shared UI
+        ├── services/           One API client per feature
+        └── context/            Auth context
 ```
 
----
+<br/>
 
-## 💻 Getting Started (Local Development)
+## Running it yourself
 
-### Prerequisites
-- Node.js 18+
-- A [Neon](https://neon.tech) (or any) PostgreSQL database
-- Expo Go app (for quick testing) or Android Studio emulator
+**You'll need:** Node.js 18+, a [Neon](https://neon.tech) Postgres database (or any Postgres), and either Expo Go or an Android emulator.
 
-### 1. Clone the repository
 ```bash
 git clone https://github.com/Tanvir0072309/JobJet-JobPortal.git
 cd JobJet-JobPortal
 ```
 
-### 2. Backend setup
+**Backend**
 ```bash
 cd backend
 npm install
-cp .env.example .env   # then fill in the values — see table below
-npm run migrate         # creates/updates all tables
-npm run dev              # starts the API on http://localhost:5000
+cp .env.example .env      # fill in the values — see table below
+npm run migrate            # creates/updates all tables
+npm run dev                 # → http://localhost:5000
 ```
 
-### 3. Frontend setup
+**Frontend**
 ```bash
 cd ../frontend
 npm install
-npx expo install expo-secure-store
-npx expo start
+npx expo start -c
 ```
-Scan the QR code with **Expo Go**, or press `a` to launch on an Android emulator.
+Scan the QR with **Expo Go**, or press `a` for an Android emulator.
 
----
+<br/>
 
-## 🔑 Environment Variables
+## Environment variables
 
-Set these in `backend/.env` for local development, and in your host's dashboard (e.g. Render → Environment) for production. **These are app-level secrets only** — end users configure their own Groq/Tomba/SMTP keys from inside the app's Settings screen, not here.
+> These are *app-level* secrets for your own deployment. End users add their own Groq/Tomba/SMTP keys inside the app itself — nothing personal ever goes in here.
 
-| Variable | Description |
-| :--- | :--- |
-| `DATABASE_URL` | Postgres connection string (Neon or any Postgres) |
-| `JWT_SECRET` | Long random string used to sign login sessions |
+| Variable | What it's for |
+| :-- | :-- |
+| `DATABASE_URL` | Postgres connection string |
+| `JWT_SECRET` | Long random string that signs login sessions |
 | `JWT_EXPIRES_IN` | Session lifetime, e.g. `7d` |
-| `ENCRYPTION_KEY` | 64-character hex string (32 bytes) — encrypts saved API keys/SMTP passwords at rest. Generate with:<br>`node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` |
+| `ENCRYPTION_KEY` | 64-char hex string — encrypts saved API keys/SMTP passwords. Generate with `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` |
 | `CORS_ORIGIN` | Comma-separated list of allowed frontend origins |
-| `JOBJET_CONTACT_EMAIL` | Your own contact email, sent as part of the User-Agent when calling OpenStreetMap's free geocoder (required by their usage policy) |
-| `PORT` | Port the API listens on (Render sets this automatically) |
+| `JOBJET_CONTACT_EMAIL` | Your contact email, sent in the User-Agent to OpenStreetMap's geocoder (required by their usage policy) |
+| `PORT` | API listen port (Render sets this for you) |
 
----
+<br/>
 
-## 📦 Building the Android APK
+## Building your own APK
 
-The project is already wired for [EAS Build](https://docs.expo.dev/build/introduction/) — no local Android SDK needed.
+Already wired for [EAS Build](https://docs.expo.dev/build/introduction/) — no Android Studio required.
 
 ```bash
 npm install -g eas-cli
@@ -198,23 +208,23 @@ cd frontend
 eas build --profile preview --platform android
 ```
 
-The `preview` profile builds a installable `.apk` and points it at the production API (`EXPO_PUBLIC_API_URL` in `eas.json`). Use `--profile production` for a Play Store `.aab` bundle instead.
+`preview` builds an installable `.apk` pointed at the production API. Swap in `--profile production` for a Play Store `.aab`.
 
----
+<br/>
 
-## 🗺️ Roadmap
+## What's next
 
 - [ ] iOS build via EAS
 - [ ] Push notifications for new replies
-- [ ] In-app email templates library
+- [ ] In-app email template library
 - [ ] Multi-language support
 
----
-
-## 📄 License
-
-Distributed under the MIT License. See `LICENSE` for details.
+<br/>
 
 <div align="center">
-  <sub>Built with ❤️ by <a href="https://github.com/Tanvir0072309">Tanvir</a></sub>
+
+Licensed under **MIT** — see <a href="LICENSE">LICENSE</a>.
+
+<sub>Built with a lot of coffee by <a href="https://github.com/Tanvir0072309">Tanvir</a></sub>
+
 </div>
