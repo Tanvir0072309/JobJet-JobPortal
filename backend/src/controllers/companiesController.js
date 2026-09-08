@@ -1,7 +1,7 @@
 const db = require("../config/db");
 const asyncHandler = require("../utils/asyncHandler");
-const groqService = require("../services/groqService");
 const { getCredential } = require("../utils/credentials");
+const groqService = require("../services/groqService");
 
 // Returns companies already discovered/saved for this user.
 const listCompanies = asyncHandler(async (req, res) => {
@@ -17,20 +17,23 @@ const listCompanies = asyncHandler(async (req, res) => {
   res.json({ success: true, companies: result.rows });
 });
 
-// Location -> companies pipeline: instead of geocoding the location and
-// querying OpenStreetMap/Overpass for nearby businesses, we now ask Groq
-// directly for real companies near the given location (plus their careers
-// page and a few example open roles), and save them as this user's
-// companies + jobs. Contact-email lookup (Tomba) and email generation/send
-// (Groq/SMTP) still happen later, lazily, in applicationsController.
+// Location -> companies pipeline. Previously this geocoded the location
+// with Nominatim and pulled nearby businesses with a website tag from
+// Overpass (OpenStreetMap). It now asks Groq directly for real companies
+// with a hiring presence near the given location/industry, along with a
+// best-guess careers page and a handful of example open roles per company -
+// all in a single Groq call. Contact-email lookup (Tomba) and application
+// email generation/send (Groq again, + SMTP) still happen later, lazily, in
+// applicationsController.
 const discoverCompanies = asyncHandler(async (req, res) => {
   const { location, limit, industry } = req.body;
 
-  if (!location || typeof location !== "string" || !location.trim()) {
+  if (!location || typeof location !== "string") {
     return res.status(400).json({ success: false, message: "A location is required." });
   }
   const searchLimit = Math.min(Math.max(Number(limit) || 20, 1), 50);
   const industryFocus = ["it", "management", "any"].includes(industry) ? industry : "any";
+  const trimmedLocation = location.trim();
 
   const groqKey = await getCredential(req.user.id, "groq");
   if (!groqKey) {
@@ -44,7 +47,7 @@ const discoverCompanies = asyncHandler(async (req, res) => {
   let found;
   try {
     found = await groqService.discoverCompanies(
-      { location: location.trim(), industry: industryFocus, limit: searchLimit },
+      { location: trimmedLocation, limit: searchLimit, industry: industryFocus },
       groqKey
     );
   } catch (err) {
@@ -55,51 +58,57 @@ const discoverCompanies = asyncHandler(async (req, res) => {
     });
   }
 
-  if (found.length === 0) {
+  if (!found || found.length === 0) {
     return res.json({
       success: true,
       inserted: 0,
-      message: `Groq couldn't confidently name any companies near "${location.trim()}". Try a bigger city nearby, a different industry filter, or a larger limit.`,
+      message: `Groq didn't come back with any companies for "${trimmedLocation}". Try a bigger/nearby city, a different industry filter, or a higher limit.`,
     });
   }
 
   let inserted = 0;
   for (const company of found) {
+    // ON CONFLICT re-upserts an existing (user, name, website) row instead
+    // of skipping it, so re-running a search refreshes stale career info
+    // instead of leaving it frozen at whatever Groq said the first time.
+    // "(xmax = 0)" is Postgres's way of telling us whether this row was a
+    // fresh INSERT (true) or an UPDATE via the conflict branch (false).
     const result = await db.query(
-      `INSERT INTO companies (user_id, name, location, website, industry, work_mode, career_page_url, source, career_details_extracted)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true)
+      `INSERT INTO companies (user_id, name, location, website, career_page_url, industry, source, career_details_extracted)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        ON CONFLICT (user_id, name, website) DO UPDATE SET
+         location = EXCLUDED.location,
          career_page_url = EXCLUDED.career_page_url,
-         work_mode = EXCLUDED.work_mode,
-         career_details_extracted = true,
+         industry = EXCLUDED.industry,
+         career_details_extracted = EXCLUDED.career_details_extracted,
          updated_at = now()
-       RETURNING id, (xmax = 0) AS is_new`,
+       RETURNING id, (xmax = 0) AS inserted`,
       [
         req.user.id,
         company.name,
-        location.trim(),
-        company.website,
-        company.industry,
-        company.work_mode,
+        trimmedLocation,
+        company.website || "",
         company.career_page_url,
+        company.industry,
         company.source,
+        company.jobs.length > 0,
       ]
     );
 
-    const companyId = result.rows[0]?.id;
-    if (result.rows[0]?.is_new) inserted += 1;
+    const row = result.rows[0];
+    if (!row) continue;
+    if (row.inserted) inserted += 1;
 
-    if (companyId && company.jobs?.length) {
-      // Replace any previously-saved Groq-sourced roles for this company
-      // with the fresh batch, so re-searching doesn't pile up stale ones.
-      await db.query("DELETE FROM jobs WHERE company_id = $1 AND source = 'groq'", [companyId]);
-      for (const job of company.jobs) {
-        await db.query(
-          `INSERT INTO jobs (company_id, user_id, title, location, work_mode, description, source)
-           VALUES ($1, $2, $3, $4, $5, $6, 'groq')`,
-          [companyId, req.user.id, job.title, location.trim(), job.work_mode, job.description]
-        );
-      }
+    // Replace this company's Groq-sourced job listings with the fresh set
+    // from this search, so re-searching doesn't just keep piling up stale
+    // duplicates from earlier runs.
+    await db.query(`DELETE FROM jobs WHERE company_id = $1 AND source = 'groq'`, [row.id]);
+    for (const job of company.jobs) {
+      await db.query(
+        `INSERT INTO jobs (company_id, user_id, title, location, work_mode, job_url, source)
+         VALUES ($1, $2, $3, $4, $5, $6, 'groq')`,
+        [row.id, req.user.id, job.title, trimmedLocation, job.work_mode, job.job_url]
+      );
     }
   }
 
@@ -107,7 +116,7 @@ const discoverCompanies = asyncHandler(async (req, res) => {
     success: true,
     inserted,
     found: found.length,
-    message: `Groq found ${found.length} compan${found.length === 1 ? "y" : "ies"} near "${location.trim()}", added ${inserted} new one${inserted === 1 ? "" : "s"}.`,
+    message: `Groq found ${found.length} compan${found.length === 1 ? "y" : "ies"} near "${trimmedLocation}", added ${inserted} new one${inserted === 1 ? "" : "s"}.`,
   });
 });
 

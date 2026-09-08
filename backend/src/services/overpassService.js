@@ -1,3 +1,8 @@
+// NOTE: no longer used by companiesController.js - company discovery now
+// goes through groqService.discoverCompanies() instead (see
+// companiesController.js for the current pipeline). Left in place, unused,
+// in case OSM-based discovery is ever wanted again as a fallback/option.
+//
 // Company discovery: geocode a free-text location with Nominatim (OSM's free
 // geocoder), then query the Overpass API for nearby businesses that have a
 // website tag. No API key needed for either service, but both are shared

@@ -70,45 +70,51 @@ async function generateApplicationEmail({ profile, company, job, tone }, apiKey)
   }
 }
 
-// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------
 // Company discovery via Groq (replaces the old OpenStreetMap/Overpass
-// pipeline). Instead of geocoding the location and querying Overpass for
-// nearby businesses, we simply ask the Groq model itself for real companies
-// operating in/near the given location that match the requested industry
-// focus, including their career page and a few currently-plausible open
-// roles. This is a single Groq call per search (not per company).
-function buildDiscoveryPrompt({ location, industry, limit }) {
-  const industryLine =
-    industry === "it"
-      ? "Focus on IT / software / technology companies (product companies, software services, startups)."
-      : industry === "management"
-      ? "Focus on management, consulting, finance, and general business companies."
-      : "Include a good mix of company types (no single-industry restriction).";
+// pipeline in overpassService.js). Instead of asking a map API "what
+// businesses are near this point", we ask the LLM directly for real
+// companies that hire around a given location/industry, plus a best-guess
+// careers page and a handful of example open roles for each - all in one
+// Groq call per search, so a single "Search Companies" tap costs exactly
+// one request no matter how many results come back.
+//
+// Caveat worth keeping in mind: this is a language model's knowledge, not a
+// live web crawl. It can occasionally get a detail wrong or suggest a career
+// page URL that has since moved, in a way that a real-time map/data source
+// would not. We instruct it to only report companies it's confident really
+// exist and to prefer well-known, verifiable names for this reason.
+// ---------------------------------------------------------------------
 
-  return [
-    `List up to ${limit} real, currently operating companies that have an office in or near: ${location}.`,
-    industryLine,
-    "Only include companies you are reasonably confident actually exist and actively hire - do not invent companies.",
-    "For each company give: its official website domain, its careers/jobs page URL if you know one (otherwise null), a short industry label, typical work mode (remote/hybrid/onsite/unknown), and 1-3 example roles this company plausibly hires for right now (title + a one-sentence description). These example roles are your best estimate, not a live listing.",
-    'Respond ONLY as strict JSON in this exact shape, no markdown, no extra text: {"companies": [{"name": "...", "website": "...", "industry": "...", "work_mode": "...", "career_page_url": "..." , "jobs": [{"title": "...", "work_mode": "...", "description": "..."}]}]}',
-  ]
-    .filter(Boolean)
-    .join("\n");
-}
-
-function normalizeWebsite(raw) {
+function normalizeUrl(raw) {
   if (!raw || typeof raw !== "string") return null;
   const trimmed = raw.trim();
   if (!trimmed) return null;
   return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
 }
 
-// One Groq call per search request (never per company) - asks the model
-// directly for company + career-page + role data instead of querying
-// OpenStreetMap/Overpass. `limit` caps how many companies come back.
-async function discoverCompanies({ location, industry = "any", limit = 20 }, apiKey) {
-  if (!apiKey) throw new Error("Groq API key not configured.");
+const WORK_MODES = ["remote", "hybrid", "onsite"];
 
+function buildDiscoveryPrompt({ location, limit, industry }) {
+  const industryLine =
+    industry === "it"
+      ? "Focus specifically on IT / software / technology companies (product companies, software services, startups, telecom, research labs)."
+      : industry === "management"
+      ? "Focus specifically on management, consulting, finance, and general business-operations companies."
+      : "Any industry is fine, pick a good mix.";
+
+  return [
+    `List up to ${limit} real companies that have an office or a genuine hiring presence in or near "${location}".`,
+    industryLine,
+    "For every company give: its official name, its real official website (the root domain, e.g. https://example.com), its industry, and its best-guess careers/jobs page URL on that same domain (e.g. https://example.com/careers).",
+    "Also give up to 3 example roles a candidate could realistically apply for there right now: a title, the likely work mode (remote, hybrid, or onsite), and a job_url - use the exact posting URL if you know it, otherwise reuse the careers page URL.",
+    "Only include companies you're reasonably confident actually exist and actually operate in or near that location - never invent a company or a website. If you don't know an exact careers URL, give the standard careers path on their real domain instead of leaving it blank.",
+    'Respond ONLY as strict JSON in this exact shape: {"companies": [{"name": "...", "website": "...", "industry": "...", "career_page_url": "...", "jobs": [{"title": "...", "work_mode": "...", "job_url": "..."}]}]} - no markdown, no commentary, no extra text.',
+  ].join("\n");
+}
+
+// One Groq call per "Search Companies" tap, however many results come back.
+async function discoverCompanies({ location, limit, industry }, apiKey) {
   const response = await fetch(GROQ_URL, {
     method: "POST",
     headers: {
@@ -121,11 +127,11 @@ async function discoverCompanies({ location, industry = "any", limit = 20 }, api
         {
           role: "system",
           content:
-            "You are a precise company-research assistant. You only report companies and details you are reasonably confident about, and you always respond with valid JSON only - no markdown, no commentary.",
+            "You are a knowledgeable, careful job-market research assistant. You only report companies, websites, and career details you are reasonably confident about, and you never fabricate a company that doesn't exist. Always respond with valid JSON only.",
         },
-        { role: "user", content: buildDiscoveryPrompt({ location, industry, limit }) },
+        { role: "user", content: buildDiscoveryPrompt({ location, limit, industry }) },
       ],
-      temperature: 0.4,
+      temperature: 0.3,
       response_format: { type: "json_object" },
     }),
   });
@@ -141,47 +147,37 @@ async function discoverCompanies({ location, industry = "any", limit = 20 }, api
   try {
     parsed = JSON.parse(raw);
   } catch {
-    throw new Error("Groq returned an unreadable response - please try again.");
+    throw new Error("Groq returned an unexpected (non-JSON) response.");
   }
 
-  const list = Array.isArray(parsed?.companies) ? parsed.companies : [];
+  const companies = Array.isArray(parsed?.companies) ? parsed.companies : [];
 
-  const seen = new Set();
-  const companies = [];
-
-  for (const item of list) {
-    const name = typeof item?.name === "string" ? item.name.trim() : "";
-    const website = normalizeWebsite(item?.website);
-    if (!name || !website) continue;
-
-    const dedupeKey = `${name.toLowerCase()}|${website.toLowerCase()}`;
-    if (seen.has(dedupeKey)) continue;
-    seen.add(dedupeKey);
-
-    const jobs = Array.isArray(item?.jobs)
-      ? item.jobs
-          .filter((j) => j && typeof j.title === "string" && j.title.trim())
-          .map((j) => ({
-            title: j.title.trim(),
-            work_mode: ["remote", "hybrid", "onsite"].includes(j.work_mode) ? j.work_mode : "unknown",
-            description: typeof j.description === "string" ? j.description.trim() : null,
-          }))
-      : [];
-
-    companies.push({
-      name,
-      website,
-      industry: typeof item?.industry === "string" ? item.industry.trim() : null,
-      work_mode: ["remote", "hybrid", "onsite"].includes(item?.work_mode) ? item.work_mode : "unknown",
-      career_page_url: normalizeWebsite(item?.career_page_url),
-      jobs,
-      source: "groq",
+  return companies
+    .filter((c) => c && typeof c.name === "string" && c.name.trim())
+    .slice(0, limit)
+    .map((c) => {
+      const website = normalizeUrl(c.website);
+      const careerPageUrl = normalizeUrl(c.career_page_url) || website;
+      return {
+        name: c.name.trim(),
+        website,
+        industry: typeof c.industry === "string" && c.industry.trim() ? c.industry.trim() : null,
+        career_page_url: careerPageUrl,
+        source: "groq",
+        jobs: Array.isArray(c.jobs)
+          ? c.jobs
+              .filter((j) => j && typeof j.title === "string" && j.title.trim())
+              .slice(0, 5)
+              .map((j) => ({
+                title: j.title.trim(),
+                work_mode: WORK_MODES.includes(String(j.work_mode || "").toLowerCase())
+                  ? String(j.work_mode).toLowerCase()
+                  : "unknown",
+                job_url: normalizeUrl(j.job_url) || careerPageUrl,
+              }))
+          : [],
+      };
     });
-
-    if (companies.length >= limit) break;
-  }
-
-  return companies;
 }
 
 module.exports = { generateApplicationEmail, discoverCompanies };

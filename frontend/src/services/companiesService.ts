@@ -19,11 +19,12 @@ export function listCompanies() {
 export type DiscoverResult = { success: boolean; inserted: number; found?: number; message: string };
 export type IndustryFocus = "it" | "management" | "any";
 
-// Asks Groq (using the user's own Groq API key, configured in Settings) for
-// real companies near `location` that match `industry`, along with their
-// careers page and a few example open roles - and saves the results as this
-// user's companies/jobs. No geocoding or OpenStreetMap involved - it's a
-// single AI call on the backend.
+// Asks the backend to discover companies near `location` using Groq (an
+// LLM call - see groqService.discoverCompanies on the backend), saving new
+// ones to this user's companies list along with their career page and a
+// handful of example open roles. `industry` steers what kind of companies
+// to ask Groq for. Requires the user to have a Groq API key saved in
+// Settings; the backend returns a GROQ_NOT_CONFIGURED error code if not.
 export function discoverCompanies(location: string, limit: number, industry: IndustryFocus = "any") {
   return apiRequest<DiscoverResult>("/api/companies/discover", {
     method: "POST",
