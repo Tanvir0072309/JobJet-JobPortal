@@ -1,7 +1,7 @@
 // Thin wrapper around Groq's OpenAI-compatible chat completions endpoint.
 // Docs: https://console.groq.com/docs/api-reference#chat-create
 const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
-const GROQ_MODEL = "llama-3.3-70b-versatile";
+const GROQ_MODEL = "openai/gpt-oss-120b";
 
 function buildPrompt({ profile, company, job, tone }) {
   const skills = [profile?.skills, profile?.programming_languages, profile?.frameworks]
