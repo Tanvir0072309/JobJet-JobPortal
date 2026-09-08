@@ -18,24 +18,16 @@ export function listCompanies() {
 
 export type DiscoverResult = { success: boolean; inserted: number; found?: number; message: string };
 export type IndustryFocus = "it" | "management" | "any";
-export type Geo = { lat: number; lon: number; displayName: string };
 
-// Finds nearby businesses with a website (Overpass) around `location`,
-// saving new ones to this user's companies list. `industry` steers which
-// kind of businesses to look for (see overpassService.js on the backend for
-// the exact OSM tags used).
-//
-// `geo`, when provided, is a lat/lon already resolved on-device (see
-// geocodeService.ts) - the backend skips its own Nominatim/Photon geocoding
-// step and uses these coordinates directly. This is what avoids OSM's
-// public geocoders blocking the backend's hosting-provider IP with a 403:
-// the phone's ordinary network IP does the geocoding instead. If `geo` is
-// omitted, the backend falls back to geocoding `location` itself (older
-// app builds still work the same as before).
-export function discoverCompanies(location: string, limit: number, industry: IndustryFocus = "any", geo?: Geo | null) {
+// Asks Groq (using the user's own Groq API key, configured in Settings) for
+// real companies near `location` that match `industry`, along with their
+// careers page and a few example open roles - and saves the results as this
+// user's companies/jobs. No geocoding or OpenStreetMap involved - it's a
+// single AI call on the backend.
+export function discoverCompanies(location: string, limit: number, industry: IndustryFocus = "any") {
   return apiRequest<DiscoverResult>("/api/companies/discover", {
     method: "POST",
-    body: geo ? { location, limit, industry, lat: geo.lat, lon: geo.lon, displayName: geo.displayName } : { location, limit, industry },
+    body: { location, limit, industry },
   });
 }
 

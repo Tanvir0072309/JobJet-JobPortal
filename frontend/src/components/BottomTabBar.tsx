@@ -34,7 +34,7 @@ export function BottomTabBar() {
         const active = isActive(tab.href);
         return (
           <Pressable key={tab.key} onPress={() => router.push(tab.href as any)} style={styles.item}>
-            <Feather name={tab.icon} size={20} color={active ? colors.black : colors.textMuted} />
+            <Feather name={tab.icon} size={20} color={active ? colors.primary : colors.textMuted} />
             <Text style={[styles.label, active && styles.labelActive]}>{tab.label}</Text>
           </Pressable>
         );
@@ -57,5 +57,5 @@ const styles = StyleSheet.create({
   },
   item: { alignItems: "center", justifyContent: "center", gap: 3, flex: 1 },
   label: { ...typography.tiny, color: colors.textMuted },
-  labelActive: { color: colors.black, fontWeight: "700" },
+  labelActive: { color: colors.primary, fontWeight: "700" },
 });

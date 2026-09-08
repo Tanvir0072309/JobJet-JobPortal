@@ -1,6 +1,7 @@
 const db = require("../config/db");
 const asyncHandler = require("../utils/asyncHandler");
-const overpassService = require("../services/overpassService");
+const groqService = require("../services/groqService");
+const { getCredential } = require("../utils/credentials");
 
 // Returns companies already discovered/saved for this user.
 const listCompanies = asyncHandler(async (req, res) => {
@@ -16,56 +17,36 @@ const listCompanies = asyncHandler(async (req, res) => {
   res.json({ success: true, companies: result.rows });
 });
 
-// Location -> companies pipeline: geocode the location with Nominatim, pull
-// nearby businesses with a website tag from Overpass, save them as this
-// user's companies. Contact-email lookup (Tomba) and email generation/send
-// (Groq/SMTP) happen later, lazily, in applicationsController - this step
-// only needs to get a name + website into the companies table.
+// Location -> companies pipeline: instead of geocoding the location and
+// querying OpenStreetMap/Overpass for nearby businesses, we now ask Groq
+// directly for real companies near the given location (plus their careers
+// page and a few example open roles), and save them as this user's
+// companies + jobs. Contact-email lookup (Tomba) and email generation/send
+// (Groq/SMTP) still happen later, lazily, in applicationsController.
 const discoverCompanies = asyncHandler(async (req, res) => {
-  const { location, limit, industry, lat, lon, displayName } = req.body;
+  const { location, limit, industry } = req.body;
 
-  if (!location || typeof location !== "string") {
+  if (!location || typeof location !== "string" || !location.trim()) {
     return res.status(400).json({ success: false, message: "A location is required." });
   }
   const searchLimit = Math.min(Math.max(Number(limit) || 20, 1), 50);
   const industryFocus = ["it", "management", "any"].includes(industry) ? industry : "any";
 
-  // OSM's public geocoders (Nominatim, and its Photon fallback) commonly
-  // block requests from shared hosting-provider IPs outright, independent
-  // of anything about the request itself - that's what was showing up here
-  // as "geocoding failed (403)". The frontend now geocodes on-device first
-  // (an ordinary phone network IP, not a blocked one) and sends the
-  // resulting lat/lon straight through, skipping this server-side geocode
-  // step entirely. We only fall back to geocoding here ourselves - and
-  // still risk the same block - when the client couldn't do it (e.g. an
-  // older app build, or the on-device geocode itself failed).
-  let geo;
-  const hasClientGeo = typeof lat === "number" && typeof lon === "number" && !Number.isNaN(lat) && !Number.isNaN(lon);
-  if (hasClientGeo) {
-    geo = { lat, lon, displayName: typeof displayName === "string" && displayName ? displayName : location.trim() };
-  } else {
-    try {
-      geo = await overpassService.geocodeLocation(location.trim());
-    } catch (err) {
-      return res.status(502).json({
-        success: false,
-        code: "GEOCODE_FAILED",
-        message: `Could not look up that location right now: ${err.message}`,
-      });
-    }
-
-    if (!geo) {
-      return res.status(404).json({
-        success: false,
-        code: "LOCATION_NOT_FOUND",
-        message: `Couldn't find "${location}" - try a more specific place name (e.g. add city/state).`,
-      });
-    }
+  const groqKey = await getCredential(req.user.id, "groq");
+  if (!groqKey) {
+    return res.status(400).json({
+      success: false,
+      code: "GROQ_NOT_CONFIGURED",
+      message: "Add your Groq API key in Settings first.",
+    });
   }
 
   let found;
   try {
-    found = await overpassService.findNearbyCompanies({ lat: geo.lat, lon: geo.lon, limit: searchLimit, industry: industryFocus });
+    found = await groqService.discoverCompanies(
+      { location: location.trim(), industry: industryFocus, limit: searchLimit },
+      groqKey
+    );
   } catch (err) {
     return res.status(502).json({
       success: false,
@@ -78,27 +59,55 @@ const discoverCompanies = asyncHandler(async (req, res) => {
     return res.json({
       success: true,
       inserted: 0,
-      message: `No businesses with a listed website were found near "${geo.displayName}". Try a bigger city nearby, or a larger search limit.`,
+      message: `Groq couldn't confidently name any companies near "${location.trim()}". Try a bigger city nearby, a different industry filter, or a larger limit.`,
     });
   }
 
   let inserted = 0;
   for (const company of found) {
     const result = await db.query(
-      `INSERT INTO companies (user_id, name, location, website, industry, source)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       ON CONFLICT (user_id, name, website) DO NOTHING
-       RETURNING id`,
-      [req.user.id, company.name, geo.displayName, company.website, company.industry, company.source]
+      `INSERT INTO companies (user_id, name, location, website, industry, work_mode, career_page_url, source, career_details_extracted)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true)
+       ON CONFLICT (user_id, name, website) DO UPDATE SET
+         career_page_url = EXCLUDED.career_page_url,
+         work_mode = EXCLUDED.work_mode,
+         career_details_extracted = true,
+         updated_at = now()
+       RETURNING id, (xmax = 0) AS is_new`,
+      [
+        req.user.id,
+        company.name,
+        location.trim(),
+        company.website,
+        company.industry,
+        company.work_mode,
+        company.career_page_url,
+        company.source,
+      ]
     );
-    if (result.rows.length > 0) inserted += 1;
+
+    const companyId = result.rows[0]?.id;
+    if (result.rows[0]?.is_new) inserted += 1;
+
+    if (companyId && company.jobs?.length) {
+      // Replace any previously-saved Groq-sourced roles for this company
+      // with the fresh batch, so re-searching doesn't pile up stale ones.
+      await db.query("DELETE FROM jobs WHERE company_id = $1 AND source = 'groq'", [companyId]);
+      for (const job of company.jobs) {
+        await db.query(
+          `INSERT INTO jobs (company_id, user_id, title, location, work_mode, description, source)
+           VALUES ($1, $2, $3, $4, $5, $6, 'groq')`,
+          [companyId, req.user.id, job.title, location.trim(), job.work_mode, job.description]
+        );
+      }
+    }
   }
 
   res.json({
     success: true,
     inserted,
     found: found.length,
-    message: `Found ${found.length} compan${found.length === 1 ? "y" : "ies"} near "${geo.displayName}", added ${inserted} new one${inserted === 1 ? "" : "s"}.`,
+    message: `Groq found ${found.length} compan${found.length === 1 ? "y" : "ies"} near "${location.trim()}", added ${inserted} new one${inserted === 1 ? "" : "s"}.`,
   });
 });
 

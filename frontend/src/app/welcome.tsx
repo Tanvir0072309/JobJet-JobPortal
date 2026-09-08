@@ -39,6 +39,10 @@ export default function WelcomeScreen() {
           unmounts. */}
       <StatusBar style="light" />
       <LinearGradient colors={gradients.brand} style={[styles.hero, { paddingTop: insets.top + spacing.xl }]}>
+        {/* Soft decorative glows for depth — purely cosmetic, no data. */}
+        <View pointerEvents="none" style={styles.heroGlowOne} />
+        <View pointerEvents="none" style={styles.heroGlowTwo} />
+
         <View style={styles.logoBadge}>
           <JobJetMark size={56} />
         </View>
@@ -53,9 +57,9 @@ export default function WelcomeScreen() {
       >
         {FEATURES.map((feature) => (
           <View key={feature.title} style={styles.featureRow}>
-            <View style={styles.featureIcon}>
+            <LinearGradient colors={gradients.accent} style={styles.featureIcon}>
               <Feather name={feature.icon} size={18} color={colors.white} />
-            </View>
+            </LinearGradient>
             <View style={styles.featureText}>
               <Text style={styles.featureTitle}>{feature.title}</Text>
               <Text style={styles.featureBody}>{feature.body}</Text>
@@ -82,31 +86,52 @@ const styles = StyleSheet.create({
   hero: {
     alignItems: "center",
     paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.xxl,
-    borderBottomLeftRadius: radius.lg,
-    borderBottomRightRadius: radius.lg,
+    paddingBottom: spacing.xxl + spacing.md,
+    borderBottomLeftRadius: radius.lg * 1.6,
+    borderBottomRightRadius: radius.lg * 1.6,
+    overflow: "hidden",
+  },
+  heroGlowOne: {
+    position: "absolute",
+    top: -60,
+    right: -50,
+    width: 220,
+    height: 220,
+    borderRadius: 110,
+    backgroundColor: "rgba(255,255,255,0.10)",
+  },
+  heroGlowTwo: {
+    position: "absolute",
+    bottom: -40,
+    left: -60,
+    width: 180,
+    height: 180,
+    borderRadius: 90,
+    backgroundColor: "rgba(255,255,255,0.08)",
   },
   logoBadge: {
-    width: 88,
-    height: 88,
+    width: 92,
+    height: 92,
     borderRadius: radius.lg,
-    backgroundColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(255,255,255,0.14)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.25)",
     alignItems: "center",
     justifyContent: "center",
     marginBottom: spacing.md,
   },
-  heroTitle: { ...typography.h1, color: colors.white, fontSize: 34 },
+  heroTitle: { ...typography.h1, color: colors.white, fontSize: 36, letterSpacing: -0.6 },
   heroSubtitle: {
     ...typography.body,
-    color: "rgba(255,255,255,0.8)",
+    color: "rgba(255,255,255,0.85)",
     textAlign: "center",
     marginTop: spacing.xs,
     maxWidth: 280,
   },
-  sheet: { flex: 1, marginTop: -radius.lg },
+  sheet: { flex: 1, marginTop: -radius.lg * 1.6 },
   sheetContent: {
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.xl,
+    paddingTop: spacing.xl + spacing.xs,
     flexGrow: 1,
     justifyContent: "space-between",
     maxWidth: 420,
@@ -120,12 +145,16 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
   },
   featureIcon: {
-    width: 40,
-    height: 40,
+    width: 42,
+    height: 42,
     borderRadius: radius.md,
-    backgroundColor: colors.black,
     alignItems: "center",
     justifyContent: "center",
+    shadowColor: colors.primary,
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
   },
   featureText: { flex: 1 },
   featureTitle: { ...typography.bodyBold, color: colors.textPrimary },

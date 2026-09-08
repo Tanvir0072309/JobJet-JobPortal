@@ -1,12 +1,16 @@
-// JobJet visual identity — monochrome, professional black & white system.
-// No brand colour: hierarchy comes from black/white/grey contrast, weight,
-// and spacing only. Status is communicated with fill/outline/weight instead
-// of colour, so the app stays legible in pure black & white.
+// JobJet visual identity — near-monochrome black & white system with a
+// touch of blue for the brand accent (buttons, active states, hero
+// gradient). Hierarchy still comes mostly from black/white/grey contrast,
+// weight, and spacing; blue is used sparingly so the app doesn't turn into
+// a generic "blue app".
 
 export const colors = {
   background: "#FFFFFF",
   surface: "#FFFFFF",
   surfaceMuted: "#F5F5F6",
+  // A very faint blue-tinted surface, used behind selected cards/rows so the
+  // "blue shading" reads as an intentional accent rather than pure grey.
+  surfaceTintBlue: "#EEF3FC",
   border: "#E4E4E7",
   borderStrong: "#D4D4D8",
 
@@ -14,13 +18,13 @@ export const colors = {
   textSecondary: "#52525B",
   textMuted: "#9A9AA0",
 
-  // Primary "action" colour — near-black, used for buttons, active states,
-  // and anywhere the old brand navy used to appear.
-  primary: "#0A0A0A",
-  primaryDark: "#000000",
+  // Primary "action" colour — a deep, slightly desaturated blue used for
+  // buttons, active tab states, links, and selection highlights.
+  primary: "#1D4ED8",
+  primaryDark: "#1E3A8A",
+  primaryLight: "#3B82F6",
 
-  // Kept for backward compatibility with older screens; both now map to
-  // neutral greys so any accent usage stays monochrome.
+  // Kept for backward compatibility with older screens.
   accentTeal: "#3F3F46",
   accentPink: "#71717A",
 
@@ -34,18 +38,18 @@ export const colors = {
   dangerBg: "#F0F0F1",
   success: "#0A0A0A",
   successBg: "#F0F0F1",
-  info: "#0A0A0A",
-  infoBg: "#F0F0F1",
+  info: "#1D4ED8",
+  infoBg: "#EEF3FC",
   warning: "#0A0A0A",
   warningBg: "#F0F0F1",
 };
 
-// Gradient stops for LinearGradient usage (primary buttons, FAB, highlights).
-// Both are now black → dark-grey so buttons read as solid black with a very
-// subtle sheen, rather than a colour gradient.
+// Gradient stops for LinearGradient usage (hero sections, primary buttons,
+// FAB, highlights). "brand" is now a deep navy-to-blue sweep instead of
+// flat black, giving the welcome hero and other accents a subtle blue glow.
 export const gradients = {
-  brand: [colors.black, "#2A2A2E"] as const,
-  accent: ["#2A2A2E", colors.accentPink] as const,
+  brand: [colors.primaryDark, colors.primary] as const,
+  accent: [colors.primary, colors.primaryLight] as const,
 };
 
 // Each status is visually distinct through fill vs. outline vs. weight,
