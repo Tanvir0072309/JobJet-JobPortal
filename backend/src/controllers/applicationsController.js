@@ -1,7 +1,6 @@
 const db = require("../config/db");
 const asyncHandler = require("../utils/asyncHandler");
 const { getCredential } = require("../utils/credentials");
-const tombaService = require("../services/tombaService");
 const hunterService = require("../services/hunterService");
 const websiteEmailScraper = require("../services/websiteEmailScraper");
 const groqService = require("../services/groqService");
@@ -191,19 +190,18 @@ const generateWithAI = asyncHandler(async (req, res) => {
 // The full "one-click apply" pipeline for N selected companies, triggered by
 // a single request from the frontend. Per company (never more than once
 // each, and only when not already cached): an email-finder (Hunter if
-// configured, else Tomba, else a built-in website scrape as a no-signup
-// fallback) locates the contact email, Groq writes the
-// email, then it's sent via the user's configured SMTP account with their
-// default documents attached.
+// configured, else JobJet's own built-in website scraper - no signup, no
+// key, always available) locates the contact email, Groq writes the email,
+// then it's sent via the user's configured SMTP account with their default
+// documents attached.
 const applyToCompanies = asyncHandler(async (req, res) => {
   const { companyIds } = req.body;
   if (!Array.isArray(companyIds) || companyIds.length === 0) {
     return res.status(400).json({ success: false, message: "Select at least one company." });
   }
 
-  const [groqKey, tombaRaw, hunterKey, smtpRaw] = await Promise.all([
+  const [groqKey, hunterKey, smtpRaw] = await Promise.all([
     getCredential(req.user.id, "groq"),
-    getCredential(req.user.id, "tomba"),
     getCredential(req.user.id, "hunter"),
     getCredential(req.user.id, "smtp"),
   ]);
@@ -213,16 +211,13 @@ const applyToCompanies = asyncHandler(async (req, res) => {
       .status(400)
       .json({ success: false, code: "GROQ_NOT_CONFIGURED", message: "Add your Groq API key in Settings first." });
   }
-  // Prefer a configured paid-ish finder (Hunter, then Tomba) for higher
-  // accuracy/verified addresses, but always fall back to scraping the
-  // company's own website directly - that path needs no signup or key at
-  // all, so applying never gets fully blocked by a third-party service's
-  // signup policy.
-  const tombaCredential = tombaRaw ? JSON.parse(tombaRaw) : null;
+  // Prefer a configured Hunter key for verified addresses, but the default
+  // (and always-available, no-signup) path is JobJet's own email finder:
+  // it reads the company's own website (contact/careers/about pages) to
+  // find a real contact address, so applying never gets blocked by a
+  // third-party service's signup policy.
   const emailFinder = hunterKey
     ? { name: "hunter", extractDomain: hunterService.extractDomain, search: (domain) => hunterService.domainSearch(domain, hunterKey), pick: hunterService.pickBestContact }
-    : tombaCredential
-    ? { name: "tomba", extractDomain: tombaService.extractDomain, search: (domain) => tombaService.domainSearch(domain, tombaCredential), pick: tombaService.pickBestContact }
     : {
         name: "website",
         extractDomain: websiteEmailScraper.extractDomain,
@@ -268,7 +263,7 @@ const applyToCompanies = asyncHandler(async (req, res) => {
         continue;
       }
 
-      // The email-finder (Hunter/Tomba/website-scrape) is only called when
+      // The email-finder (Hunter/website-scrape) is only called when
       // we don't already have a saved contact.
       let contactEmail = company.contacts?.[0]?.email || null;
       if (!contactEmail && company.website) {

@@ -21,7 +21,7 @@ const listCompanies = asyncHandler(async (req, res) => {
 // querying OpenStreetMap/Overpass for nearby businesses, we now ask Groq
 // directly for real companies near the given location (plus their careers
 // page and a few example open roles), and save them as this user's
-// companies + jobs. Contact-email lookup (Tomba) and email generation/send
+// companies + jobs. Contact-email lookup (Hunter/website finder) and email generation/send
 // (Groq/SMTP) still happen later, lazily, in applicationsController.
 const discoverCompanies = asyncHandler(async (req, res) => {
   const { location, limit, industry } = req.body;

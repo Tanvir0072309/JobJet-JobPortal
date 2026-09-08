@@ -2,7 +2,7 @@ const db = require("../config/db");
 const asyncHandler = require("../utils/asyncHandler");
 const { encrypt } = require("../utils/crypto");
 
-const ALLOWED_PROVIDERS = ["groq", "tomba", "hunter", "smtp"];
+const ALLOWED_PROVIDERS = ["groq", "hunter", "smtp"];
 
 // GET /api/settings/api-credentials
 // Returns only whether each provider is configured + a masked hint - never the real key.
@@ -28,7 +28,7 @@ const listApiCredentials = asyncHandler(async (req, res) => {
 });
 
 const saveApiCredential = asyncHandler(async (req, res) => {
-  const { provider, apiKey, smtpConfig, tombaKey, tombaSecret } = req.body;
+  const { provider, apiKey, smtpConfig } = req.body;
 
   if (!ALLOWED_PROVIDERS.includes(provider)) {
     return res.status(400).json({ success: false, message: `Unsupported provider: ${provider}` });
@@ -37,18 +37,7 @@ const saveApiCredential = asyncHandler(async (req, res) => {
   let secretToStore;
   let lastFour;
 
-  if (provider === "tomba") {
-    // Tomba (like Hunter's replacement here) authenticates with a key +
-    // secret pair rather than a single API key, so it's stored as JSON the
-    // same way the SMTP config is.
-    if (!tombaKey || !tombaSecret) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Both the Tomba API key and secret are required." });
-    }
-    secretToStore = JSON.stringify({ key: tombaKey.trim(), secret: tombaSecret.trim() });
-    lastFour = tombaKey.trim().slice(-4);
-  } else if (provider === "smtp") {
+  if (provider === "smtp") {
     if (!smtpConfig || !smtpConfig.host || !smtpConfig.user || !smtpConfig.pass) {
       return res
         .status(400)

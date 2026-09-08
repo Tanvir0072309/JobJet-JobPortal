@@ -89,7 +89,7 @@ CREATE INDEX IF NOT EXISTS idx_documents_user ON documents (user_id);
 CREATE TABLE IF NOT EXISTS api_credentials (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES users (id) ON DELETE CASCADE,
-  provider VARCHAR(50) NOT NULL, -- 'groq' | 'tomba' (JSON: key/secret) | 'smtp' (JSON: host/port/user/pass/fromName) | future providers
+  provider VARCHAR(50) NOT NULL, -- 'groq' | 'hunter' | 'smtp' (JSON: host/port/user/pass/fromName) | future providers
   encrypted_key TEXT NOT NULL,
   key_iv TEXT NOT NULL,
   key_auth_tag TEXT NOT NULL,
