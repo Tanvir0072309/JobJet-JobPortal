@@ -1,6 +1,10 @@
 import { apiRequest } from "./api";
 
-export type User = { id: string; email: string };
+// gmailConnected/gmailEmail aren't returned by /api/auth/register or
+// /api/auth/login (those endpoints don't touch Gmail at all) - they're
+// filled in right after, from GET /api/gmail/status, in AuthContext. See
+// AuthContext.refreshGmailStatus.
+export type User = { id: string; email: string; gmailConnected?: boolean; gmailEmail?: string | null };
 export type AuthResponse = { success: boolean; token: string; user: User };
 
 export function register(email: string, password: string) {

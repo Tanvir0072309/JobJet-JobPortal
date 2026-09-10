@@ -47,6 +47,7 @@ export default function RootLayout() {
           <Stack.Screen name="login" />
           <Stack.Screen name="register" />
           <Stack.Screen name="forgot-password" />
+          <Stack.Screen name="connect-gmail" />
           <Stack.Screen name="(main)" />
         </Stack>
       </AuthProvider>

@@ -1,32 +1,32 @@
-// JobJet visual identity — near-monochrome black & white system with a
-// touch of blue for the brand accent (buttons, active states, hero
-// gradient). Hierarchy still comes mostly from black/white/grey contrast,
-// weight, and spacing; blue is used sparingly so the app doesn't turn into
-// a generic "blue app".
+// JobJet visual identity — matches the "jj" logo mark: a deep indigo to
+// violet to magenta gradient. Hierarchy still comes mostly from
+// black/white/grey contrast, weight, and spacing; the violet/magenta accent
+// is used for buttons, active states, and hero gradients so the whole app
+// reads as one consistent brand instead of a generic template.
 
 export const colors = {
   background: "#FFFFFF",
   surface: "#FFFFFF",
-  surfaceMuted: "#F5F5F6",
-  // A very faint blue-tinted surface, used behind selected cards/rows so the
-  // "blue shading" reads as an intentional accent rather than pure grey.
-  surfaceTintBlue: "#EEF3FC",
-  border: "#E4E4E7",
-  borderStrong: "#D4D4D8",
+  surfaceMuted: "#F6F4FB",
+  // A faint violet-tinted surface, used behind selected cards/rows so the
+  // brand shading reads as an intentional accent rather than pure grey.
+  surfaceTintBlue: "#F1EBFC",
+  border: "#E7E1F2",
+  borderStrong: "#D8CFEC",
 
-  textPrimary: "#0A0A0A",
-  textSecondary: "#52525B",
-  textMuted: "#9A9AA0",
+  textPrimary: "#150C2E",
+  textSecondary: "#5B5470",
+  textMuted: "#9C93AF",
 
-  // Primary "action" colour — a deep, slightly desaturated blue used for
+  // Primary "action" colour — the violet from the jj logo, used for
   // buttons, active tab states, links, and selection highlights.
-  primary: "#1D4ED8",
-  primaryDark: "#1E3A8A",
-  primaryLight: "#3B82F6",
+  primary: "#7C1FE0",
+  primaryDark: "#2B1093",
+  primaryLight: "#C93AF6",
 
   // Kept for backward compatibility with older screens.
   accentTeal: "#3F3F46",
-  accentPink: "#71717A",
+  accentPink: "#C93AF6",
 
   black: "#000000",
   white: "#FFFFFF",
@@ -34,19 +34,20 @@ export const colors = {
   // Status colours are intentionally desaturated near-blacks/greys —
   // differentiation comes from the badge's fill vs. outline vs. label,
   // not from colour.
-  danger: "#0A0A0A",
-  dangerBg: "#F0F0F1",
-  success: "#0A0A0A",
-  successBg: "#F0F0F1",
-  info: "#1D4ED8",
-  infoBg: "#EEF3FC",
-  warning: "#0A0A0A",
-  warningBg: "#F0F0F1",
+  danger: "#150C2E",
+  dangerBg: "#F1EEF6",
+  success: "#150C2E",
+  successBg: "#F1EEF6",
+  info: "#7C1FE0",
+  infoBg: "#F1EBFC",
+  warning: "#150C2E",
+  warningBg: "#F1EEF6",
 };
 
 // Gradient stops for LinearGradient usage (hero sections, primary buttons,
-// FAB, highlights). "brand" is now a deep navy-to-blue sweep instead of
-// flat black, giving the welcome hero and other accents a subtle blue glow.
+// FAB, highlights). "brand" sweeps from deep indigo to violet, "accent"
+// sweeps from violet into magenta — both lifted straight from the jj logo
+// mark so gradients and the logo always feel like the same palette.
 export const gradients = {
   brand: [colors.primaryDark, colors.primary] as const,
   accent: [colors.primary, colors.primaryLight] as const,

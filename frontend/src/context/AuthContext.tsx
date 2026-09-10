@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useMemo, useState, ReactNo
 import * as SecureStore from "expo-secure-store";
 import { setAuthToken, setUnauthorizedHandler } from "../services/api";
 import * as authService from "../services/authService";
+import { getGmailStatus } from "../services/gmailService";
 import { registerForPushNotificationsAsync } from "../services/notificationsService";
 import { savePushToken } from "../services/settingsService";
 import { clearScreenCache } from "../utils/screenCache";
@@ -14,6 +15,12 @@ type AuthContextValue = {
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
+  // Re-checks Gmail connection status from the backend and updates the
+  // cached user - called right after the OAuth browser flow closes (see
+  // connect-gmail.tsx) and from the main layout's gate. Returns the
+  // up-to-date `connected` value so callers don't need a second read of
+  // `user` immediately after (which may not have re-rendered yet).
+  refreshGmailStatus: () => Promise<boolean>;
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -104,6 +111,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await persistSession(res.token, res.user);
   };
 
+  const refreshGmailStatus = async (): Promise<boolean> => {
+    try {
+      const res = await getGmailStatus();
+      setUser((prev) => {
+        if (!prev) return prev;
+        const updated: User = { ...prev, gmailConnected: res.connected, gmailEmail: res.email };
+        SecureStore.setItemAsync(USER_KEY, JSON.stringify(updated)).catch(() => {});
+        return updated;
+      });
+      return res.connected;
+    } catch {
+      // Not fatal - the connect-gmail screen/gate will just re-check next
+      // time rather than crash on a transient network error here.
+      return false;
+    }
+  };
+
+  // Right after a session is restored/created, also pull the latest Gmail
+  // status - the JWT payload/authService response never carries it, and it
+  // can change server-side (e.g. the user disconnected from Settings on
+  // another device) independent of login/register.
+  useEffect(() => {
+    if (!user) return;
+    refreshGmailStatus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
+
   const logout = async () => {
     try {
       await savePushToken(null);
@@ -125,7 +159,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const value = useMemo(
-    () => ({ user, isAuthenticated: !!user, isBootstrapping, login, register, logout }),
+    () => ({ user, isAuthenticated: !!user, isBootstrapping, login, register, logout, refreshGmailStatus }),
     [user, isBootstrapping]
   );
 

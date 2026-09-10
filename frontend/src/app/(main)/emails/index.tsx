@@ -53,15 +53,16 @@ export default function EmailsInboxScreen() {
     }
   }, []);
 
-  // Pulls new replies in from IMAP first, then reloads the inbox list so
-  // they show up immediately. Failures here (e.g. sending email not
-  // configured yet) don't block viewing whatever's already in the inbox.
+  // Refreshes the inbox list. Reply-checking itself no longer does
+  // anything server-side (JobJet's Gmail connection is send-only by
+  // design - see emailsService.checkReplies), so this mainly just re-pulls
+  // whatever's already stored.
   const checkForReplies = useCallback(async () => {
     setChecking(true);
     setCheckNotice(null);
     try {
       const res = await checkReplies();
-      setCheckNotice(res.newReplies > 0 ? `${res.newReplies} new repl${res.newReplies === 1 ? "y" : "ies"} found.` : "No new replies.");
+      setCheckNotice(res.newReplies > 0 ? `${res.newReplies} new repl${res.newReplies === 1 ? "y" : "ies"} found.` : res.message || "No new replies.");
       await load();
     } catch (err) {
       setCheckNotice(err instanceof ApiError ? err.message : "Couldn't check for replies right now.");

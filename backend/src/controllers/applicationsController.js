@@ -1,10 +1,24 @@
 const db = require("../config/db");
+const env = require("../config/env");
 const asyncHandler = require("../utils/asyncHandler");
 const { getCredential } = require("../utils/credentials");
 const hunterService = require("../services/hunterService");
 const websiteEmailScraper = require("../services/websiteEmailScraper");
 const groqService = require("../services/groqService");
-const mailerService = require("../services/mailerService");
+const gmailService = require("../services/gmailService");
+
+// Server-side, per-user daily send count - computed from applications.sent_at
+// rather than a separate counter table, so it can't drift and needs no
+// extra schema. Not something the client can influence at all, so it's not
+// bypassable by a client-side change.
+async function getSentTodayCount(userId) {
+  const result = await db.query(
+    `SELECT COUNT(*)::int AS count FROM applications
+     WHERE user_id = $1 AND status = 'sent' AND sent_at >= date_trunc('day', now())`,
+    [userId]
+  );
+  return result.rows[0].count;
+}
 
 const VALID_STATUSES = [
   "draft",
@@ -192,18 +206,18 @@ const generateWithAI = asyncHandler(async (req, res) => {
 // each, and only when not already cached): an email-finder (Hunter if
 // configured, else JobJet's own built-in website scraper - no signup, no
 // key, always available) locates the contact email, Groq writes the email,
-// then it's sent via the user's configured SMTP account with their default
-// documents attached.
+// then it's sent via the user's connected Gmail account (Gmail API, OAuth)
+// with their default documents attached.
 const applyToCompanies = asyncHandler(async (req, res) => {
   const { companyIds } = req.body;
   if (!Array.isArray(companyIds) || companyIds.length === 0) {
     return res.status(400).json({ success: false, message: "Select at least one company." });
   }
 
-  const [groqKey, hunterKey, smtpRaw] = await Promise.all([
+  const [groqKey, hunterKey, userRow] = await Promise.all([
     getCredential(req.user.id, "groq"),
     getCredential(req.user.id, "hunter"),
-    getCredential(req.user.id, "smtp"),
+    db.query("SELECT gmail_connected FROM users WHERE id = $1", [req.user.id]),
   ]);
 
   if (!groqKey) {
@@ -227,14 +241,13 @@ const applyToCompanies = asyncHandler(async (req, res) => {
         pick: websiteEmailScraper.pickBestContact,
       };
 
-  if (!smtpRaw) {
+  if (!userRow.rows[0]?.gmail_connected) {
     return res.status(400).json({
       success: false,
-      code: "SMTP_NOT_CONFIGURED",
-      message: "Add your sending email account in Settings first.",
+      code: "GMAIL_NOT_CONNECTED",
+      message: "Connect your Gmail account first - go to Settings to connect it.",
     });
   }
-  const smtpConfig = JSON.parse(smtpRaw);
 
   const profileRes = await db.query("SELECT * FROM profiles WHERE user_id = $1", [req.user.id]);
   const profile = profileRes.rows[0] || {};
@@ -247,8 +260,17 @@ const applyToCompanies = asyncHandler(async (req, res) => {
   const attachments = docsRes.rows;
 
   const results = [];
+  let sentSoFarToday = await getSentTodayCount(req.user.id);
 
   for (const companyId of companyIds) {
+    if (sentSoFarToday >= env.dailyEmailLimitPerUser) {
+      results.push({
+        companyId,
+        status: "skipped",
+        message: `Daily sending limit reached (${env.dailyEmailLimitPerUser}/day). Try again tomorrow.`,
+      });
+      continue;
+    }
     try {
       const companyRes = await db.query(
         `SELECT c.*,
@@ -314,21 +336,22 @@ const applyToCompanies = asyncHandler(async (req, res) => {
       const application = appResult.rows[0];
 
       // Send it, with the user's default documents (e.g. resume) attached.
-      await mailerService.sendApplicationEmail({
-        smtpConfig,
+      await gmailService.sendApplicationEmail({
+        userId: req.user.id,
         to: contactEmail,
         subject: generated.subject,
         body: finalBody,
         documents: attachments,
       });
+      sentSoFarToday += 1;
 
       await db.query(`UPDATE applications SET status = 'sent', sent_at = now(), updated_at = now() WHERE id = $1`, [
         application.id,
       ]);
       await db.query(
         `INSERT INTO email_messages (application_id, user_id, direction, from_address, to_address, subject, body)
-         VALUES ($1, $2, 'outbound', $3, $4, $5, $6)`,
-        [application.id, req.user.id, smtpConfig.user, contactEmail, generated.subject, finalBody]
+         VALUES ($1, $2, 'outbound', (SELECT gmail_email FROM users WHERE id = $2), $3, $4, $5)`,
+        [application.id, req.user.id, contactEmail, generated.subject, finalBody]
       );
 
       results.push({ companyId, company: company.name, status: "sent", to: contactEmail });
@@ -357,14 +380,28 @@ const sendApplication = asyncHandler(async (req, res) => {
   if (!application.recipient_email) {
     return res.status(400).json({ success: false, message: "This application has no recipient email yet." });
   }
+  // Guards against duplicate sends on request retries (e.g. a flaky
+  // connection causing the client to resend the same tap) - an application
+  // that's already 'sent' won't be sent again from this endpoint.
+  if (application.status === "sent") {
+    return res.status(409).json({ success: false, code: "ALREADY_SENT", message: "This application was already sent." });
+  }
 
-  const smtpRaw = await getCredential(req.user.id, "smtp");
-  if (!smtpRaw) {
+  const userRow = await db.query("SELECT gmail_connected FROM users WHERE id = $1", [req.user.id]);
+  if (!userRow.rows[0]?.gmail_connected) {
     return res
       .status(400)
-      .json({ success: false, code: "SMTP_NOT_CONFIGURED", message: "Add your sending email account in Settings first." });
+      .json({ success: false, code: "GMAIL_NOT_CONNECTED", message: "Connect your Gmail account first - go to Settings to connect it." });
   }
-  const smtpConfig = JSON.parse(smtpRaw);
+
+  const sentToday = await getSentTodayCount(req.user.id);
+  if (sentToday >= env.dailyEmailLimitPerUser) {
+    return res.status(429).json({
+      success: false,
+      code: "DAILY_LIMIT_REACHED",
+      message: `Daily sending limit reached (${env.dailyEmailLimitPerUser}/day). Try again tomorrow.`,
+    });
+  }
 
   const documentIds = application.selected_document_ids || [];
   const docsRes = documentIds.length
@@ -374,8 +411,8 @@ const sendApplication = asyncHandler(async (req, res) => {
       ])
     : { rows: [] };
 
-  await mailerService.sendApplicationEmail({
-    smtpConfig,
+  await gmailService.sendApplicationEmail({
+    userId: req.user.id,
     to: application.recipient_email,
     subject: application.subject,
     body: application.body,
@@ -389,8 +426,8 @@ const sendApplication = asyncHandler(async (req, res) => {
 
   await db.query(
     `INSERT INTO email_messages (application_id, user_id, direction, from_address, to_address, subject, body)
-     VALUES ($1, $2, 'outbound', $3, $4, $5, $6)`,
-    [id, req.user.id, smtpConfig.user, application.recipient_email, application.subject, application.body]
+     VALUES ($1, $2, 'outbound', (SELECT gmail_email FROM users WHERE id = $2), $3, $4, $5)`,
+    [id, req.user.id, application.recipient_email, application.subject, application.body]
   );
 
   res.json({ success: true, application: updated.rows[0] });

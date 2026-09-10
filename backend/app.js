@@ -11,15 +11,16 @@ const companiesRoutes = require("./src/routes/companiesRoutes");
 const jobsRoutes = require("./src/routes/jobsRoutes");
 const applicationsRoutes = require("./src/routes/applicationsRoutes");
 const emailRoutes = require("./src/routes/emailRoutes");
-const { startReplyPolling } = require("./src/services/replyNotifier");
+const gmailRoutes = require("./src/routes/gmailRoutes");
 
 const app = express();
 
-// Periodically checks every user's inbox for new company replies and pushes
-// a notification when one shows up, even if they haven't opened the app
-// (see replyNotifier.js for how/why - this backend has no separate worker
-// process, so it's just a setInterval on the same long-running server).
-startReplyPolling();
+// NOTE: the old background IMAP reply-poller (replyNotifier.js /
+// imapService.js) has been removed along with the SMTP/App Password system
+// it depended on. The Gmail OAuth connection this app now uses is scoped to
+// gmail.send ONLY (by design - no inbox reading), so there is no
+// credential left that could poll an inbox. See emailController.js's
+// checkReplies for the user-facing explanation.
 
 app.use(cors({ origin: env.corsOrigin }));
 app.use(express.json());
@@ -45,6 +46,7 @@ app.use("/api/companies", companiesRoutes);
 app.use("/api/jobs", jobsRoutes);
 app.use("/api/applications", applicationsRoutes);
 app.use("/api/email", emailRoutes);
+app.use("/api/gmail", gmailRoutes);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

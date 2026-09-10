@@ -2,7 +2,13 @@ const db = require("../config/db");
 const asyncHandler = require("../utils/asyncHandler");
 const { encrypt } = require("../utils/crypto");
 
-const ALLOWED_PROVIDERS = ["groq", "hunter", "smtp"];
+// "smtp" used to live here (App Password based sending) - that system has
+// been replaced entirely by Gmail OAuth (see routes/gmailRoutes.js,
+// controllers/gmailController.js). Gmail connection status/tokens are
+// intentionally NOT managed through this generic credentials endpoint,
+// since it needs its own OAuth start/callback/disconnect flow rather than
+// "paste a key and save".
+const ALLOWED_PROVIDERS = ["groq", "hunter"];
 
 // GET /api/settings/api-credentials
 // Returns only whether each provider is configured + a masked hint - never the real key.
@@ -17,6 +23,11 @@ const listApiCredentials = asyncHandler(async (req, res) => {
     configured[provider] = { configured: false };
   }
   for (const row of result.rows) {
+    // Skip any leftover 'smtp'/'gmail' rows from before this endpoint was
+    // scoped down to ALLOWED_PROVIDERS - those are surfaced via their own
+    // dedicated endpoints now (deleteApiCredential below still cleans up
+    // an old 'smtp' row if one exists, since DELETE isn't provider-gated).
+    if (!ALLOWED_PROVIDERS.includes(row.provider)) continue;
     configured[row.provider] = {
       configured: true,
       maskedKey: `••••••••${row.last_four || ""}`,
@@ -28,41 +39,17 @@ const listApiCredentials = asyncHandler(async (req, res) => {
 });
 
 const saveApiCredential = asyncHandler(async (req, res) => {
-  const { provider, apiKey, smtpConfig } = req.body;
+  const { provider, apiKey } = req.body;
 
   if (!ALLOWED_PROVIDERS.includes(provider)) {
     return res.status(400).json({ success: false, message: `Unsupported provider: ${provider}` });
   }
 
-  let secretToStore;
-  let lastFour;
-
-  if (provider === "smtp") {
-    if (!smtpConfig || !smtpConfig.host || !smtpConfig.user || !smtpConfig.pass) {
-      return res
-        .status(400)
-        .json({ success: false, message: "host, user, and pass are required for the sending email." });
-    }
-    secretToStore = JSON.stringify({
-      host: smtpConfig.host,
-      port: smtpConfig.port || 587,
-      secure: !!smtpConfig.secure,
-      user: smtpConfig.user,
-      pass: smtpConfig.pass,
-      fromName: smtpConfig.fromName || "",
-      // Optional - only needed if the user's provider isn't one of the
-      // auto-detected ones in imapService.js (Gmail/Outlook/Yahoo/iCloud/Zoho).
-      imapHost: smtpConfig.imapHost || "",
-      imapPort: smtpConfig.imapPort || "",
-    });
-    lastFour = String(smtpConfig.user).slice(-4);
-  } else {
-    if (typeof apiKey !== "string" || apiKey.trim().length < 8) {
-      return res.status(400).json({ success: false, message: "A valid API key is required." });
-    }
-    secretToStore = apiKey.trim();
-    lastFour = secretToStore.slice(-4);
+  if (typeof apiKey !== "string" || apiKey.trim().length < 8) {
+    return res.status(400).json({ success: false, message: "A valid API key is required." });
   }
+  const secretToStore = apiKey.trim();
+  const lastFour = secretToStore.slice(-4);
 
   const { encrypted, iv, authTag } = encrypt(secretToStore);
 

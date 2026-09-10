@@ -42,11 +42,14 @@ export function getThread(applicationId: string) {
   return getApplication(applicationId);
 }
 
-// Connects to the user's inbox via IMAP (using the SMTP credentials already
-// saved in Settings) and pulls in any new replies from companies that were
-// emailed. Safe to call often - already-seen messages are skipped server-side.
+// NOTE: JobJet's Gmail connection is send-only (gmail.send scope, by
+// design - no inbox reading), so this no longer actually checks an inbox.
+// The backend keeps this endpoint responding successfully (rather than
+// erroring) so this call site doesn't need special-casing, but always
+// reports newReplies: 0 and a `message` explaining why - see
+// backend/src/controllers/emailController.js.
 export function checkReplies() {
-  return apiRequest<{ success: boolean; newReplies: number }>("/api/email/replies/check", {
+  return apiRequest<{ success: boolean; newReplies: number; message?: string }>("/api/email/replies/check", {
     method: "POST",
   });
 }

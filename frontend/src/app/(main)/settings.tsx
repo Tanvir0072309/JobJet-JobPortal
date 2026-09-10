@@ -7,6 +7,7 @@ import { Button } from "../../components/Button";
 import { LoadingState, ErrorState } from "../../components/LoadingState";
 import { useAuth } from "../../context/AuthContext";
 import * as settingsService from "../../services/settingsService";
+import { connectGmail, disconnectGmail } from "../../services/gmailService";
 import { ApiError } from "../../services/api";
 import { getCached, setCached } from "../../utils/screenCache";
 import { colors, spacing, typography, radius } from "../../constants/jobjetTheme";
@@ -19,7 +20,7 @@ type CachedSettings = { credentials: Record<string, any>; appSettings: any };
 
 export default function SettingsScreen() {
   const router = useRouter();
-  const { user, logout } = useAuth();
+  const { user, logout, refreshGmailStatus } = useAuth();
   const cached = getCached<CachedSettings>(CACHE_KEY);
 
   const [loading, setLoading] = useState(cached === undefined);
@@ -28,18 +29,10 @@ export default function SettingsScreen() {
   const [credentials, setCredentials] = useState<Record<string, any>>(cached?.credentials ?? {});
   const [groqKey, setGroqKey] = useState("");
   const [hunterKey, setHunterKey] = useState("");
-  const [tombaKey, setTombaKey] = useState("");
-  const [tombaSecret, setTombaSecret] = useState("");
   const [savingProvider, setSavingProvider] = useState<string | null>(null);
 
-  const [smtpHost, setSmtpHost] = useState("");
-  const [smtpPort, setSmtpPort] = useState("587");
-  const [smtpUser, setSmtpUser] = useState("");
-  const [smtpPass, setSmtpPass] = useState("");
-  const [smtpFromName, setSmtpFromName] = useState("");
-  const [imapHost, setImapHost] = useState("");
-  const [imapPort, setImapPort] = useState("");
-  const [savingSmtp, setSavingSmtp] = useState(false);
+  const [gmailBusy, setGmailBusy] = useState(false);
+  const [gmailError, setGmailError] = useState<string | null>(null);
 
   const [appSettings, setAppSettings] = useState<any>(cached?.appSettings ?? {});
   const [savingSettings, setSavingSettings] = useState(false);
@@ -87,7 +80,7 @@ export default function SettingsScreen() {
     }
   };
 
-  const handleRemoveKey = async (provider: "groq" | "hunter" | "tomba") => {
+  const handleRemoveKey = async (provider: "groq" | "hunter") => {
     setSavingProvider(provider);
     try {
       await settingsService.deleteApiCredential(provider);
@@ -99,59 +92,52 @@ export default function SettingsScreen() {
     }
   };
 
-  const handleSaveTomba = async () => {
-    if (!tombaKey.trim() || !tombaSecret.trim()) {
-      Alert.alert("Missing details", "Both the Tomba API key and secret are required.");
-      return;
-    }
-    setSavingProvider("tomba");
+  const handleConnectGmail = async () => {
+    setGmailError(null);
+    setGmailBusy(true);
     try {
-      await settingsService.saveTombaCredential(tombaKey.trim(), tombaSecret.trim());
-      setTombaKey("");
-      setTombaSecret("");
-      await load();
+      const result = await connectGmail();
+      if (result.status === "cancelled") {
+        setGmailError("Connection cancelled.");
+        return;
+      }
+      if (result.status === "error") {
+        setGmailError("Something went wrong connecting Gmail. Please try again.");
+        return;
+      }
+      const connected = await refreshGmailStatus();
+      if (!connected) setGmailError("Gmail didn't finish connecting. Please try again.");
     } catch (err) {
-      Alert.alert("Couldn't save Tomba credentials", err instanceof ApiError ? err.message : "Please try again.");
+      setGmailError(err instanceof ApiError ? err.message : "Couldn't start Gmail connection. Please try again.");
     } finally {
-      setSavingProvider(null);
+      setGmailBusy(false);
     }
   };
 
-  const handleSaveSmtp = async () => {
-    if (!smtpHost.trim() || !smtpUser.trim() || !smtpPass.trim()) {
-      Alert.alert("Missing details", "Host, email, and app password are all required.");
-      return;
-    }
-    setSavingSmtp(true);
-    try {
-      await settingsService.saveSmtpCredential({
-        host: smtpHost.trim(),
-        port: Number(smtpPort) || 587,
-        user: smtpUser.trim(),
-        pass: smtpPass,
-        fromName: smtpFromName.trim(),
-        imapHost: imapHost.trim() || undefined,
-        imapPort: imapPort ? Number(imapPort) : undefined,
-      });
-      setSmtpPass("");
-      await load();
-    } catch (err) {
-      Alert.alert("Couldn't save sending email", err instanceof ApiError ? err.message : "Please try again.");
-    } finally {
-      setSavingSmtp(false);
-    }
-  };
-
-  const handleRemoveSmtp = async () => {
-    setSavingSmtp(true);
-    try {
-      await settingsService.deleteApiCredential("smtp");
-      await load();
-    } catch (err) {
-      Alert.alert("Couldn't remove", err instanceof ApiError ? err.message : "Please try again.");
-    } finally {
-      setSavingSmtp(false);
-    }
+  const handleDisconnectGmail = async () => {
+    Alert.alert(
+      "Disconnect Gmail?",
+      "JobJet won't be able to send application emails until you reconnect.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Disconnect",
+          style: "destructive",
+          onPress: async () => {
+            setGmailBusy(true);
+            setGmailError(null);
+            try {
+              await disconnectGmail();
+              await refreshGmailStatus();
+            } catch (err) {
+              setGmailError(err instanceof ApiError ? err.message : "Couldn't disconnect. Please try again.");
+            } finally {
+              setGmailBusy(false);
+            }
+          },
+        },
+      ]
+    );
   };
 
   const handleSaveAppSettings = async () => {
@@ -213,87 +199,39 @@ export default function SettingsScreen() {
           saving={savingProvider === "hunter"}
         />
         <Text style={styles.helperNote}>
-          Optional - improves accuracy with verified emails. Without a Hunter or Tomba key, JobJet automatically
-          reads each company's own website (contact/careers/about pages) to find an email instead, so applying
-          always works even with no key configured. Get a free Hunter key at hunter.io if you want it (50
-          credits/month, no card) - some accounts need a work email to sign up, so this is purely optional.
+          Optional - improves accuracy with verified emails. Without a Hunter key, JobJet automatically uses its own
+          built-in email finder, reading each company's own website (contact/careers/about pages) to find an email
+          instead - so applying always works even with no key configured. Get a free Hunter key at hunter.io if you
+          want it (50 credits/month, no card) - some accounts need a work email to sign up, so this is purely
+          optional.
         </Text>
-        <View style={styles.divider} />
-        <Text style={styles.rowLabel}>Tomba API Key + Secret (optional)</Text>
-        {credentials.tomba?.configured ? (
-          <Text style={styles.rowValue}>Configured ({credentials.tomba.maskedKey})</Text>
-        ) : (
-          <Text style={styles.rowValueMuted}>Not configured</Text>
-        )}
-        <Text style={styles.helperNote}>
-          Optional fallback if you don't want to use Hunter - some regions block webmail signups on Tomba, so Hunter
-          above is usually the easier one to set up. Get a free key + secret at tomba.io if you'd rather use this
-          instead.
-        </Text>
-        <Input
-          value={tombaKey}
-          onChangeText={setTombaKey}
-          placeholder={credentials.tomba?.configured ? "Enter a new key to replace it" : "Tomba API Key (ta_...)"}
-          secureTextEntry
-          autoCapitalize="none"
-        />
-        <Input
-          value={tombaSecret}
-          onChangeText={setTombaSecret}
-          placeholder="Tomba API Secret (ts_...)"
-          secureTextEntry
-          autoCapitalize="none"
-        />
-        <View style={styles.credentialActions}>
-          <Button label="Save" onPress={handleSaveTomba} loading={savingProvider === "tomba"} style={{ flex: 1 }} />
-          {credentials.tomba?.configured ? (
-            <Button
-              label="Remove"
-              variant="danger"
-              onPress={() => handleRemoveKey("tomba")}
-              style={{ flex: 1 }}
-            />
-          ) : null}
-        </View>
       </Card>
 
       <Text style={styles.sectionTitle}>Sending Email</Text>
       <Card style={styles.card}>
-        <Text style={styles.rowLabel}>Status</Text>
-        {credentials.smtp?.configured ? (
-          <Text style={styles.rowValue}>Connected ({credentials.smtp.maskedKey})</Text>
+        <Text style={styles.rowLabel}>Gmail connection</Text>
+        {user?.gmailConnected ? (
+          <Text style={styles.rowValue}>Connected ({user.gmailEmail})</Text>
         ) : (
           <Text style={styles.rowValueMuted}>Not connected - applications can't be sent yet</Text>
         )}
-        <Input label="SMTP host" value={smtpHost} onChangeText={setSmtpHost} placeholder="smtp.gmail.com" autoCapitalize="none" />
-        <Input label="Port" value={smtpPort} onChangeText={(v) => setSmtpPort(v.replace(/[^0-9]/g, ""))} keyboardType="number-pad" placeholder="587" />
-        <Input label="Email address" value={smtpUser} onChangeText={setSmtpUser} placeholder="you@gmail.com" autoCapitalize="none" />
-        <Input label="App password" value={smtpPass} onChangeText={setSmtpPass} secureTextEntry placeholder="16-character app password" />
-        <Input label="Display name (optional)" value={smtpFromName} onChangeText={setSmtpFromName} placeholder="Your Name" />
-        <Input
-          label="IMAP host (optional)"
-          value={imapHost}
-          onChangeText={setImapHost}
-          placeholder="Auto-detected for Gmail/Outlook/Yahoo/iCloud/Zoho"
-          autoCapitalize="none"
-        />
-        <Input
-          label="IMAP port (optional)"
-          value={imapPort}
-          onChangeText={(v) => setImapPort(v.replace(/[^0-9]/g, ""))}
-          keyboardType="number-pad"
-          placeholder="993"
-        />
+
+        {gmailError ? <Text style={styles.errorText}>{gmailError}</Text> : null}
+
         <View style={styles.credentialActions}>
-          <Button label="Save" onPress={handleSaveSmtp} loading={savingSmtp} style={{ flex: 1 }} />
-          {credentials.smtp?.configured ? (
-            <Button label="Remove" variant="danger" onPress={handleRemoveSmtp} style={{ flex: 1 }} />
-          ) : null}
+          {user?.gmailConnected ? (
+            <>
+              <Button label="Reconnect" variant="secondary" onPress={handleConnectGmail} loading={gmailBusy} style={{ flex: 1 }} />
+              <Button label="Disconnect" variant="danger" onPress={handleDisconnectGmail} loading={gmailBusy} style={{ flex: 1 }} />
+            </>
+          ) : (
+            <Button label="Connect Gmail" onPress={handleConnectGmail} loading={gmailBusy} style={{ flex: 1 }} />
+          )}
         </View>
+
         <Text style={styles.helperNote}>
-          Gmail users: turn on 2-Step Verification, then create an "App Password" - use that here, not your normal
-          password. This same account is also used to check for replies (via IMAP) on the Emails tab - only fill in
-          "IMAP host" if your provider isn't Gmail, Outlook, Yahoo, iCloud, or Zoho.
+          JobJet sends applications through your Gmail account via Google's official API - no password or app
+          password needed. This connection only allows sending email; JobJet cannot read your inbox.
         </Text>
       </Card>
 
@@ -408,6 +346,7 @@ const styles = StyleSheet.create({
   rowLabel: { ...typography.small, color: colors.textSecondary, marginTop: spacing.sm },
   rowValue: { ...typography.bodyBold, color: colors.textPrimary, marginBottom: spacing.xs },
   rowValueMuted: { ...typography.body, color: colors.textMuted, marginBottom: spacing.xs, fontStyle: "italic" },
+  errorText: { ...typography.small, color: colors.danger, marginBottom: spacing.xs },
   divider: { height: 1, backgroundColor: colors.border, marginVertical: spacing.md },
   helperNote: { ...typography.small, color: colors.textMuted, marginTop: spacing.sm, fontStyle: "italic" },
   credentialActions: { flexDirection: "row", gap: spacing.sm, marginTop: spacing.xs },

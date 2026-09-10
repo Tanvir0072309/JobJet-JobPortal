@@ -24,6 +24,15 @@ CREATE INDEX IF NOT EXISTS idx_users_email ON users (email);
 -- Safe to re-run against a database created before push_token existed.
 ALTER TABLE users ADD COLUMN IF NOT EXISTS push_token TEXT;
 
+-- Gmail OAuth connection status, surfaced directly on the user row so the
+-- frontend can check "is Gmail connected" without decrypting anything.
+-- The actual OAuth tokens (refresh_token/access_token, encrypted) live in
+-- api_credentials under provider = 'gmail', same as every other per-user
+-- secret in this app - these two columns are just a fast, non-secret status
+-- flag + display email, kept in sync by gmailController.js.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS gmail_connected BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS gmail_email VARCHAR(255);
+
 CREATE TABLE IF NOT EXISTS password_reset_tokens (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES users (id) ON DELETE CASCADE,
@@ -89,7 +98,7 @@ CREATE INDEX IF NOT EXISTS idx_documents_user ON documents (user_id);
 CREATE TABLE IF NOT EXISTS api_credentials (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES users (id) ON DELETE CASCADE,
-  provider VARCHAR(50) NOT NULL, -- 'groq' | 'hunter' | 'smtp' (JSON: host/port/user/pass/fromName) | future providers
+  provider VARCHAR(50) NOT NULL, -- 'groq' | 'hunter' | 'gmail' (JSON: refresh_token/access_token/expires_at) | future providers
   encrypted_key TEXT NOT NULL,
   key_iv TEXT NOT NULL,
   key_auth_tag TEXT NOT NULL,

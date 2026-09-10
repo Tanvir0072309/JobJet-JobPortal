@@ -37,7 +37,9 @@ export default function RegisterScreen() {
     setLoading(true);
     try {
       await register(email.trim(), password);
-      router.replace("/(main)/applications");
+      // Newly registered accounts never have Gmail connected yet -
+      // onboarding isn't complete until they do (see connect-gmail.tsx).
+      router.replace("/connect-gmail");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Something went wrong. Please try again.");
     } finally {

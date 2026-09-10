@@ -111,7 +111,7 @@ export default function FindCompaniesScreen() {
   const clearSelection = () => setSelected(new Set());
 
   // A single tap here fires ONE request no matter how many companies are
-  // selected - the backend loops internally, calling Tomba/Groq once per
+  // selected - the backend loops internally, calling the email finder/Groq once per
   // company (only when needed), then sends each email with the attached
   // default resume/documents.
   const handleApplyWithAI = async () => {

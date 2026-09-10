@@ -10,7 +10,7 @@ import { colors, spacing, typography } from "../constants/jobjetTheme";
 
 export default function LoginScreen() {
   const router = useRouter();
-  const { login } = useAuth();
+  const { login, refreshGmailStatus } = useAuth();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -26,7 +26,12 @@ export default function LoginScreen() {
     setLoading(true);
     try {
       await login(email.trim(), password);
-      router.replace("/(main)/applications");
+      // Existing accounts from before Gmail OAuth existed (or anyone who
+      // disconnected Gmail from Settings) still need to connect it -
+      // check explicitly here instead of trusting the (main) layout's
+      // gate to catch up before this screen has already navigated away.
+      const connected = await refreshGmailStatus();
+      router.replace(connected ? "/(main)/applications" : "/connect-gmail");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Something went wrong. Please try again.");
     } finally {

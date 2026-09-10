@@ -13,36 +13,7 @@ export function saveApiCredential(provider: "groq" | "hunter", apiKey: string) {
   });
 }
 
-// Tomba (the email-finder, replacing Hunter) authenticates with a key +
-// secret pair rather than a single API key.
-export function saveTombaCredential(tombaKey: string, tombaSecret: string) {
-  return apiRequest("/api/settings/api-credentials", {
-    method: "PUT",
-    body: { provider: "tomba", tombaKey, tombaSecret },
-  });
-}
-
-export type SmtpConfig = {
-  host: string;
-  port: number;
-  secure?: boolean;
-  user: string;
-  pass: string;
-  fromName?: string;
-  imapHost?: string;
-  imapPort?: number;
-};
-
-// The sending email account (used to actually deliver applications, with
-// attachments) - stored the same way as the groq/tomba keys, encrypted.
-export function saveSmtpCredential(smtpConfig: SmtpConfig) {
-  return apiRequest("/api/settings/api-credentials", {
-    method: "PUT",
-    body: { provider: "smtp", smtpConfig },
-  });
-}
-
-export function deleteApiCredential(provider: "groq" | "tomba" | "hunter" | "smtp") {
+export function deleteApiCredential(provider: "groq" | "hunter") {
   return apiRequest(`/api/settings/api-credentials/${provider}`, { method: "DELETE" });
 }
 

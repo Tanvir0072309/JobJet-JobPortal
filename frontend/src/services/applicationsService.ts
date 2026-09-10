@@ -71,7 +71,7 @@ export function generateWithAI(companyIds: string[]) {
   });
 }
 
-// One request no matter how many companies are selected - Tomba/Groq are
+// One request no matter how many companies are selected - the email finder/Groq are
 // each called at most once per company inside this single call.
 export function applyToCompanies(companyIds: string[]) {
   return apiRequest<{ success: boolean; results: ApplyResult[] }>("/api/applications/apply", {
