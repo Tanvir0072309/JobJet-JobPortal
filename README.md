@@ -10,7 +10,7 @@
 
 <br/>
 
-<a href="https://expo.dev/artifacts/eas/3NjDFXl_3ASVwOqkTUfVD4WmpEikbBwhiNFA8HVuz8k.apk">
+<a href="https://expo.dev/artifacts/eas/RPsgO-bZJIT3iWWmG3LMQrjTHf8fdJe7-mMz9hJOc5k.apk">
   <img src="https://img.shields.io/badge/⚡%20DOWNLOAD%20FOR%20ANDROID-Tap%20to%20get%20the%20APK-0B0F13?style=for-the-badge&logo=android&logoColor=3DDC84&labelColor=0B0F13" alt="Download APK" height="52"/>
 </a>
 
