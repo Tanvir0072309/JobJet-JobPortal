@@ -36,7 +36,7 @@ async function domainSearch(domain, apiKey, { limit = 5 } = {}) {
 function pickBestContact(hunterData) {
   if (!hunterData?.emails?.length) return null;
 
-  const PRIORITY_TYPES = ["hr", "recruiting", "recruitment", "executive", "management"];
+  const PRIORITY_TYPES = ["hr", "hiring", "recruiting", "recruitment", "careers", "jobs", "talent", "people"];
   const sorted = [...hunterData.emails].sort((a, b) => (b.confidence || 0) - (a.confidence || 0));
   const preferred = sorted.find((e) =>
     PRIORITY_TYPES.includes(String(e.department || e.position || "").toLowerCase())

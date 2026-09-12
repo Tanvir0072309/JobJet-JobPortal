@@ -69,9 +69,15 @@ CREATE TABLE IF NOT EXISTS profiles (
   education JSONB DEFAULT '[]'::jsonb,
   certifications JSONB DEFAULT '[]'::jsonb,
   projects JSONB DEFAULT '[]'::jsonb,
+  -- Job posts/roles this candidate is interested in (e.g. "Backend Developer",
+  -- "React Native Developer"...). The frontend requires at least 5 before
+  -- saving. Used to match a specific resume/project-list to the post it was
+  -- written for (see documents.post_tag below).
+  interested_posts JSONB DEFAULT '[]'::jsonb,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS interested_posts JSONB DEFAULT '[]'::jsonb;
 
 -- =========================================================
 -- DOCUMENTS
@@ -86,10 +92,18 @@ CREATE TABLE IF NOT EXISTS documents (
   file_path TEXT NOT NULL,
   file_size_bytes BIGINT,
   is_default BOOLEAN NOT NULL DEFAULT false,
+  -- Which interested post (profiles.interested_posts entry) this specific
+  -- resume/project-list was written for, e.g. "Backend Developer". NULL means
+  -- it's the general/default one for its document_type. Lets a candidate
+  -- keep a different resume + project list per role and have the right pair
+  -- attached automatically depending on which post is being applied to.
+  post_tag VARCHAR(255),
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_documents_user ON documents (user_id);
+ALTER TABLE documents ADD COLUMN IF NOT EXISTS post_tag VARCHAR(255);
+CREATE INDEX IF NOT EXISTS idx_documents_post_tag ON documents (user_id, document_type, post_tag);
 
 -- =========================================================
 -- API CREDENTIALS (per-user, encrypted at rest)
@@ -122,6 +136,10 @@ CREATE TABLE IF NOT EXISTS companies (
   career_page_url TEXT,
   work_mode VARCHAR(20), -- remote | hybrid | onsite | unknown
   industry VARCHAR(255),
+  -- Rough headcount bucket so smaller startups can be surfaced/prioritized
+  -- instead of only big, well-known companies. startup (<~50) | small
+  -- (~50-200) | mid (~200-1000) | large (1000+) | unknown.
+  company_size VARCHAR(20) DEFAULT 'unknown',
   source VARCHAR(100),
   career_details_extracted BOOLEAN NOT NULL DEFAULT false,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -129,6 +147,7 @@ CREATE TABLE IF NOT EXISTS companies (
   UNIQUE (user_id, name, website)
 );
 CREATE INDEX IF NOT EXISTS idx_companies_user ON companies (user_id);
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS company_size VARCHAR(20) DEFAULT 'unknown';
 
 CREATE TABLE IF NOT EXISTS jobs (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -225,7 +244,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_email_messages_provider_msg
 CREATE TABLE IF NOT EXISTS application_settings (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID UNIQUE NOT NULL REFERENCES users (id) ON DELETE CASCADE,
-  default_company_search_limit INTEGER NOT NULL DEFAULT 20,
+  default_company_search_limit INTEGER NOT NULL DEFAULT 5,
   default_location VARCHAR(255),
   remote_preference VARCHAR(20) DEFAULT 'any', -- remote | hybrid | onsite | any
   preferred_job_types JSONB DEFAULT '[]'::jsonb,

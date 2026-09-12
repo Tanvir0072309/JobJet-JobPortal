@@ -2,10 +2,62 @@ const db = require("../config/db");
 const env = require("../config/env");
 const asyncHandler = require("../utils/asyncHandler");
 const { getCredential } = require("../utils/credentials");
-const hunterService = require("../services/hunterService");
-const websiteEmailScraper = require("../services/websiteEmailScraper");
+const emailFinderService = require("../services/emailFinderService");
 const groqService = require("../services/groqService");
 const gmailService = require("../services/gmailService");
+
+// Only resume + project_list are ever attached to an application email.
+// A candidate can keep a different resume/project-list per post (tagged via
+// documents.post_tag, e.g. "Backend Developer") - when applying for a job
+// whose title matches a tag, that pair is used; otherwise we fall back to
+// whichever resume/project_list is marked as the default for its type.
+const ATTACHMENT_TYPES = ["resume", "project_list"];
+
+async function pickAttachmentsForPost(userId, postTitle) {
+  const matched = [];
+  const matchedTypes = new Set();
+
+  if (postTitle) {
+    const tagged = await db.query(
+      `SELECT DISTINCT ON (document_type) *
+       FROM documents
+       WHERE user_id = $1 AND document_type = ANY($2::text[]) AND post_tag IS NOT NULL AND lower(post_tag) = lower($3)
+       ORDER BY document_type, updated_at DESC`,
+      [userId, ATTACHMENT_TYPES, postTitle]
+    );
+    for (const row of tagged.rows) {
+      matched.push(row);
+      matchedTypes.add(row.document_type);
+    }
+  }
+
+  const missingTypes = ATTACHMENT_TYPES.filter((t) => !matchedTypes.has(t));
+  if (missingTypes.length) {
+    const fallback = await db.query(
+      `SELECT * FROM documents WHERE user_id = $1 AND document_type = ANY($2::text[]) AND is_default = true`,
+      [userId, missingTypes]
+    );
+    for (const row of fallback.rows) {
+      matched.push(row);
+      matchedTypes.add(row.document_type);
+    }
+  }
+
+  // Every application email should have a resume attached if the candidate
+  // has uploaded one at all - if there's still no resume after the tag and
+  // default lookups above (e.g. nothing was ever marked as default), fall
+  // back to whichever resume was uploaded most recently rather than sending
+  // with no resume attached at all.
+  if (!matchedTypes.has("resume")) {
+    const anyResume = await db.query(
+      `SELECT * FROM documents WHERE user_id = $1 AND document_type = 'resume' ORDER BY updated_at DESC LIMIT 1`,
+      [userId]
+    );
+    if (anyResume.rows[0]) matched.push(anyResume.rows[0]);
+  }
+
+  return matched;
+}
 
 // Server-side, per-user daily send count - computed from applications.sent_at
 // rather than a separate counter table, so it can't drift and needs no
@@ -214,9 +266,8 @@ const applyToCompanies = asyncHandler(async (req, res) => {
     return res.status(400).json({ success: false, message: "Select at least one company." });
   }
 
-  const [groqKey, hunterKey, userRow] = await Promise.all([
+  const [groqKey, userRow] = await Promise.all([
     getCredential(req.user.id, "groq"),
-    getCredential(req.user.id, "hunter"),
     db.query("SELECT gmail_connected FROM users WHERE id = $1", [req.user.id]),
   ]);
 
@@ -225,21 +276,6 @@ const applyToCompanies = asyncHandler(async (req, res) => {
       .status(400)
       .json({ success: false, code: "GROQ_NOT_CONFIGURED", message: "Add your Groq API key in Settings first." });
   }
-  // Prefer a configured Hunter key for verified addresses, but the default
-  // (and always-available, no-signup) path is JobJet's own email finder:
-  // it reads the company's own website (contact/careers/about pages) to
-  // find a real contact address, so applying never gets blocked by a
-  // third-party service's signup policy.
-  const emailFinder = hunterKey
-    ? { name: "hunter", extractDomain: hunterService.extractDomain, search: (domain) => hunterService.domainSearch(domain, hunterKey), pick: hunterService.pickBestContact }
-    : {
-        name: "website",
-        extractDomain: websiteEmailScraper.extractDomain,
-        // search() here does the whole scrape+pick in one step since there's
-        // no separate "raw domain-search response" concept to keep around.
-        search: (_domain, website) => websiteEmailScraper.scrapeCompanyEmail(website),
-        pick: websiteEmailScraper.pickBestContact,
-      };
 
   if (!userRow.rows[0]?.gmail_connected) {
     return res.status(400).json({
@@ -253,11 +289,6 @@ const applyToCompanies = asyncHandler(async (req, res) => {
   const profile = profileRes.rows[0] || {};
   const settingsRes = await db.query("SELECT * FROM application_settings WHERE user_id = $1", [req.user.id]);
   const settings = settingsRes.rows[0] || {};
-
-  const docsRes = await db.query("SELECT * FROM documents WHERE user_id = $1 AND is_default = true", [
-    req.user.id,
-  ]);
-  const attachments = docsRes.rows;
 
   const results = [];
   let sentSoFarToday = await getSentTodayCount(req.user.id);
@@ -285,25 +316,31 @@ const applyToCompanies = asyncHandler(async (req, res) => {
         continue;
       }
 
-      // The email-finder (Hunter/website-scrape) is only called when
-      // we don't already have a saved contact.
+      // The hiring-email finder is only called when we don't already have a
+      // saved contact (normally there already is one - discoverCompanies
+      // looks this up at search time now). Only ever a confirmed hiring
+      // contact, never a generic info@/contact@ guess - see
+      // emailFinderService for the accuracy-first fallback chain.
       let contactEmail = company.contacts?.[0]?.email || null;
-      if (!contactEmail && company.website) {
-        const domain = emailFinder.extractDomain(company.website);
-        const finderData = await emailFinder.search(domain, company.website);
-        const best = emailFinder.pick(finderData);
-        if (best) {
-          contactEmail = best.email;
+      if (!contactEmail) {
+        const hiring = await emailFinderService.findHiringEmail({ userId: req.user.id, company, groqKey });
+        if (hiring?.email) {
+          contactEmail = hiring.email;
           await db.query(
             `INSERT INTO company_contacts (company_id, user_id, email, contact_type, confidence, source)
              VALUES ($1, $2, $3, $4, $5, $6)`,
-            [company.id, req.user.id, best.email, best.type, best.confidence, emailFinder.name]
+            [company.id, req.user.id, hiring.email, hiring.type, hiring.confidence, hiring.source]
           );
         }
       }
 
       if (!contactEmail) {
-        results.push({ companyId, company: company.name, status: "skipped", message: "No contact email found." });
+        results.push({
+          companyId,
+          company: company.name,
+          status: "skipped",
+          message: "No confirmed hiring email found for this company.",
+        });
         continue;
       }
 
@@ -316,6 +353,11 @@ const applyToCompanies = asyncHandler(async (req, res) => {
       );
 
       const finalBody = settings.email_signature ? `${generated.body}\n\n${settings.email_signature}` : generated.body;
+
+      // Resume + project list only, matched to this specific job's title
+      // when the candidate has tagged a pair for that post - otherwise the
+      // default resume/project list is used.
+      const attachments = await pickAttachmentsForPost(req.user.id, job?.title);
 
       const appResult = await db.query(
         `INSERT INTO applications (user_id, company_id, job_id, recipient_email, subject, body, status, selected_document_ids)

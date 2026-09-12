@@ -1,6 +1,7 @@
 const db = require("../config/db");
 const asyncHandler = require("../utils/asyncHandler");
 const groqService = require("../services/groqService");
+const emailFinderService = require("../services/emailFinderService");
 const { getCredential } = require("../utils/credentials");
 
 // Returns companies already discovered/saved for this user.
@@ -24,13 +25,28 @@ const listCompanies = asyncHandler(async (req, res) => {
 // companies + jobs. Contact-email lookup (Hunter/website finder) and email generation/send
 // (Groq/SMTP) still happen later, lazily, in applicationsController.
 const discoverCompanies = asyncHandler(async (req, res) => {
-  const { location, limit, industry } = req.body;
+  const { location, limit, industry, workMode } = req.body;
 
   if (!location || typeof location !== "string" || !location.trim()) {
     return res.status(400).json({ success: false, message: "A location is required." });
   }
-  const searchLimit = Math.min(Math.max(Number(limit) || 20, 1), 50);
-  const industryFocus = ["it", "management", "any"].includes(industry) ? industry : "any";
+  // At most 5 companies can be searched/returned per search request.
+  const searchLimit = Math.min(Math.max(Number(limit) || 5, 1), 5);
+  const industryFocus = [
+    "it",
+    "management",
+    "finance",
+    "healthcare",
+    "retail",
+    "marketing",
+    "education",
+    "manufacturing",
+    "hospitality",
+    "any",
+  ].includes(industry)
+    ? industry
+    : "any";
+  const workModeFocus = ["remote", "hybrid", "onsite", "any"].includes(workMode) ? workMode : "any";
 
   const groqKey = await getCredential(req.user.id, "groq");
   if (!groqKey) {
@@ -44,7 +60,7 @@ const discoverCompanies = asyncHandler(async (req, res) => {
   let found;
   try {
     found = await groqService.discoverCompanies(
-      { location: location.trim(), industry: industryFocus, limit: searchLimit },
+      { location: location.trim(), industry: industryFocus, limit: searchLimit, workMode: workModeFocus },
       groqKey
     );
   } catch (err) {
@@ -59,17 +75,35 @@ const discoverCompanies = asyncHandler(async (req, res) => {
     return res.json({
       success: true,
       inserted: 0,
-      message: `Groq couldn't confidently name any companies near "${location.trim()}". Try a bigger city nearby, a different industry filter, or a larger limit.`,
+      companies: [],
+      message: `Couldn't confidently find any companies near "${location.trim()}" with a real careers page and open roles${
+        workModeFocus !== "any" ? ` offering ${workModeFocus} work` : ""
+      }. Try a bigger city nearby, a different filter, or a larger limit.`,
     });
   }
 
+  // Every new search replaces the old one - old search history shouldn't
+  // pile up below the fresh results. Companies already applied to are kept
+  // (their application record still references them via SET NULL), only
+  // the leftover, un-applied-to companies from previous searches are
+  // cleared out. (jobs / company_contacts cascade-delete automatically.)
+  await db.query(
+    `DELETE FROM companies
+     WHERE user_id = $1
+       AND id NOT IN (SELECT company_id FROM applications WHERE company_id IS NOT NULL)`,
+    [req.user.id]
+  );
+
   let inserted = 0;
+  let emailsFound = 0;
+  const searchedCompanyIds = [];
   for (const company of found) {
     const result = await db.query(
-      `INSERT INTO companies (user_id, name, location, website, industry, work_mode, career_page_url, source, career_details_extracted)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true)
+      `INSERT INTO companies (user_id, name, location, website, industry, company_size, work_mode, career_page_url, source, career_details_extracted)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, true)
        ON CONFLICT (user_id, name, website) DO UPDATE SET
          career_page_url = EXCLUDED.career_page_url,
+         company_size = EXCLUDED.company_size,
          work_mode = EXCLUDED.work_mode,
          career_details_extracted = true,
          updated_at = now()
@@ -80,6 +114,7 @@ const discoverCompanies = asyncHandler(async (req, res) => {
         location.trim(),
         company.website,
         company.industry,
+        company.company_size,
         company.work_mode,
         company.career_page_url,
         company.source,
@@ -87,6 +122,7 @@ const discoverCompanies = asyncHandler(async (req, res) => {
     );
 
     const companyId = result.rows[0]?.id;
+    if (companyId) searchedCompanyIds.push(companyId);
     if (result.rows[0]?.is_new) inserted += 1;
 
     if (companyId && company.jobs?.length) {
@@ -101,13 +137,59 @@ const discoverCompanies = asyncHandler(async (req, res) => {
         );
       }
     }
+
+    // Look up (and verify) the company's hiring email right at search time,
+    // so it's already there in the results instead of only appearing later
+    // when applying. Only ever a confirmed hiring/careers/HR contact - a
+    // website with no hiring-specific address (or a failed lookup) is left
+    // with no email at all rather than a generic info@/contact@ guess.
+    if (companyId) {
+      const existing = await db.query(
+        "SELECT 1 FROM company_contacts WHERE company_id = $1 LIMIT 1",
+        [companyId]
+      );
+      if (existing.rows.length === 0) {
+        const hiring = await emailFinderService
+          .findHiringEmail({ userId: req.user.id, company, groqKey })
+          .catch(() => null);
+        if (hiring?.email) {
+          emailsFound += 1;
+          await db.query(
+            `INSERT INTO company_contacts (company_id, user_id, email, contact_type, confidence, source)
+             VALUES ($1, $2, $3, $4, $5, $6)`,
+            [companyId, req.user.id, hiring.email, hiring.type, hiring.confidence, hiring.source]
+          );
+        }
+      } else {
+        emailsFound += 1; // already had one from a previous search
+      }
+    }
   }
+
+  // Return exactly the companies from THIS search (not the user's full
+  // saved history) so the app can show only what was just searched for -
+  // e.g. searching with a limit of 4 shows only those 4, not older
+  // still-saved companies from a previous search.
+  const freshResult = searchedCompanyIds.length
+    ? await db.query(
+        `SELECT c.*,
+           (SELECT json_agg(j) FROM jobs j WHERE j.company_id = c.id) AS jobs,
+           (SELECT json_agg(cc) FROM company_contacts cc WHERE cc.company_id = c.id) AS contacts
+         FROM companies c
+         WHERE c.id = ANY($1::uuid[])
+         ORDER BY c.created_at DESC`,
+        [searchedCompanyIds]
+      )
+    : { rows: [] };
 
   res.json({
     success: true,
     inserted,
     found: found.length,
-    message: `Groq found ${found.length} compan${found.length === 1 ? "y" : "ies"} near "${location.trim()}", added ${inserted} new one${inserted === 1 ? "" : "s"}.`,
+    companies: freshResult.rows,
+    message: `Found ${found.length} compan${found.length === 1 ? "y" : "ies"} near "${location.trim()}" (added ${inserted} new one${
+      inserted === 1 ? "" : "s"
+    }), with a confirmed hiring email for ${emailsFound} of them.`,
   });
 });
 

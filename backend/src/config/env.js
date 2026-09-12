@@ -51,5 +51,5 @@ module.exports = {
   // configurable so it can be tuned without a code change as the user base
   // grows. Enforced from applications.sent_at (see applicationsController.js),
   // not from anything the client sends, so it can't be bypassed client-side.
-  dailyEmailLimitPerUser: Number(process.env.DAILY_EMAIL_LIMIT_PER_USER) || 100,
+  dailyEmailLimitPerUser: Number(process.env.DAILY_EMAIL_LIMIT_PER_USER) || 25,
 };
