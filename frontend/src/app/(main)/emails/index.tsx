@@ -4,16 +4,13 @@ import { useRouter, useFocusEffect } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import { EmptyState } from "../../../components/EmptyState";
 import { LoadingState, ErrorState } from "../../../components/LoadingState";
+import { CompanyLogo } from "../../../components/CompanyLogo";
 import { listInbox, checkReplies, type InboxItem } from "../../../services/emailsService";
 import { ApiError } from "../../../services/api";
 import { getCached, setCached } from "../../../utils/screenCache";
 import { colors, spacing, typography } from "../../../constants/jobjetTheme";
 
 const CACHE_KEY = "inbox:items";
-
-function initials(name: string) {
-  return name.trim().charAt(0).toUpperCase() || "?";
-}
 
 function formatDate(value: string | null) {
   if (!value) return "";
@@ -120,11 +117,7 @@ export default function EmailsInboxScreen() {
           onPress={() => router.push(`/(main)/emails/${item.id}` as any)}
           style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
         >
-          <View style={[styles.avatar, item.unread && styles.avatarUnread]}>
-            <Text style={[styles.avatarText, item.unread && styles.avatarTextUnread]}>
-              {initials(item.sender)}
-            </Text>
-          </View>
+          <CompanyLogo name={item.sender} website={item.senderWebsite} size={44} unread={item.unread} />
           <View style={styles.rowMain}>
             <View style={styles.rowTopLine}>
               <Text style={[styles.sender, item.unread && styles.textUnread]} numberOfLines={1}>

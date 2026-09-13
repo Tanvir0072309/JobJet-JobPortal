@@ -6,7 +6,7 @@ import { useAuth } from "../context/AuthContext";
 import { colors, spacing, typography } from "../constants/jobjetTheme";
 
 const NAV_ITEMS = [
-  { label: "Applications", href: "/(main)/applications" },
+  { label: "Send Email", href: "/(main)/send-email" },
   { label: "Find Companies", href: "/(main)/find-companies" },
   { label: "Dashboard", href: "/(main)/dashboard" },
   { label: "Profile", href: "/(main)/profile" },
@@ -38,7 +38,7 @@ export function Header() {
 
   return (
     <View style={styles.header}>
-      <Pressable onPress={() => navigate("/(main)/applications")} style={styles.logoArea}>
+      <Pressable onPress={() => navigate("/(main)/send-email")} style={styles.logoArea}>
         <JobJetLogo size={22} />
       </Pressable>
 

@@ -13,6 +13,8 @@ export type Application = {
   company_id: string | null;
   job_id: string | null;
   company_name: string | null;
+  company_website: string | null;
+  company_location?: string | null;
   job_title: string | null;
   recipient_email: string | null;
   subject: string | null;
@@ -82,6 +84,16 @@ export function applyToCompanies(companyIds: string[]) {
 
 export function sendApplication(id: string) {
   return apiRequest(`/api/applications/${id}/send`, { method: "POST" });
+}
+
+// Manual "Send Email" composer (To/From/Write message) - a one-off email
+// sent through the connected Gmail account, independent of the AI-apply
+// pipeline. Shows up in the inbox afterwards just like an AI-sent one.
+export function sendManualEmail(payload: { to: string; subject?: string; body: string; documentIds?: string[] }) {
+  return apiRequest<{ success: boolean; application: Application }>("/api/applications/compose-send", {
+    method: "POST",
+    body: payload,
+  });
 }
 
 export function listUnreadReplies() {

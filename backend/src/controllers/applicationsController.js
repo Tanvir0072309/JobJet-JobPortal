@@ -43,17 +43,24 @@ async function pickAttachmentsForPost(userId, postTitle) {
     }
   }
 
-  // Every application email should have a resume attached if the candidate
-  // has uploaded one at all - if there's still no resume after the tag and
-  // default lookups above (e.g. nothing was ever marked as default), fall
-  // back to whichever resume was uploaded most recently rather than sending
-  // with no resume attached at all.
-  if (!matchedTypes.has("resume")) {
-    const anyResume = await db.query(
-      `SELECT * FROM documents WHERE user_id = $1 AND document_type = 'resume' ORDER BY updated_at DESC LIMIT 1`,
-      [userId]
+  // Every application email should have a resume (and project list, if one
+  // exists) attached if the candidate has uploaded one at all - if there's
+  // still nothing after the tag and default lookups above (e.g. nothing was
+  // ever explicitly marked as default), fall back to whichever document of
+  // that type was uploaded most recently rather than silently sending with
+  // it missing. Previously this fallback only ran for "resume", so a
+  // project_list that was never marked Default would never get attached at
+  // all - that's the bug behind documents "not going" with an application.
+  for (const type of ATTACHMENT_TYPES) {
+    if (matchedTypes.has(type)) continue;
+    const anyDoc = await db.query(
+      `SELECT * FROM documents WHERE user_id = $1 AND document_type = $2 ORDER BY updated_at DESC LIMIT 1`,
+      [userId, type]
     );
-    if (anyResume.rows[0]) matched.push(anyResume.rows[0]);
+    if (anyDoc.rows[0]) {
+      matched.push(anyDoc.rows[0]);
+      matchedTypes.add(type);
+    }
   }
 
   return matched;
@@ -109,7 +116,7 @@ const getSummary = asyncHandler(async (req, res) => {
 // List applications for the Applications page, newest / unread-reply first.
 const listApplications = asyncHandler(async (req, res) => {
   const result = await db.query(
-    `SELECT a.*, c.name AS company_name, j.title AS job_title
+    `SELECT a.*, c.name AS company_name, c.website AS company_website, c.location AS company_location, j.title AS job_title
      FROM applications a
      LEFT JOIN companies c ON c.id = a.company_id
      LEFT JOIN jobs j ON j.id = a.job_id
@@ -123,7 +130,7 @@ const listApplications = asyncHandler(async (req, res) => {
 const getApplication = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const appResult = await db.query(
-    `SELECT a.*, c.name AS company_name, j.title AS job_title
+    `SELECT a.*, c.name AS company_name, c.website AS company_website, j.title AS job_title
      FROM applications a
      LEFT JOIN companies c ON c.id = a.company_id
      LEFT JOIN jobs j ON j.id = a.job_id
@@ -475,6 +482,79 @@ const sendApplication = asyncHandler(async (req, res) => {
   res.json({ success: true, application: updated.rows[0] });
 });
 
+// Manual "Send Email" - the To/From/Write-a-message screen, for when the
+// candidate wants to write and send a one-off email themselves instead of
+// using AI-generated apply. Goes out through the same connected Gmail
+// account, and is recorded the same way (an application-ish row + an
+// email_messages entry) so it shows up in the inbox alongside AI-sent
+// applications. company_id/job_id are left null since there may not be a
+// saved company for this recipient.
+const sendManualEmail = asyncHandler(async (req, res) => {
+  const { to, subject, body, documentIds } = req.body;
+
+  if (!to || typeof to !== "string" || !/^\S+@\S+\.\S+$/.test(to.trim())) {
+    return res.status(400).json({ success: false, message: "A valid recipient email is required." });
+  }
+  if (!body || typeof body !== "string" || !body.trim()) {
+    return res.status(400).json({ success: false, message: "Write a message before sending." });
+  }
+
+  const userRow = await db.query("SELECT gmail_connected, gmail_email FROM users WHERE id = $1", [req.user.id]);
+  if (!userRow.rows[0]?.gmail_connected) {
+    return res.status(400).json({
+      success: false,
+      code: "GMAIL_NOT_CONNECTED",
+      message: "Connect your Gmail account first - go to Settings to connect it.",
+    });
+  }
+
+  const sentToday = await getSentTodayCount(req.user.id);
+  if (sentToday >= env.dailyEmailLimitPerUser) {
+    return res.status(429).json({
+      success: false,
+      code: "DAILY_LIMIT_REACHED",
+      message: `Daily sending limit reached (${env.dailyEmailLimitPerUser}/day). Try again tomorrow.`,
+    });
+  }
+
+  const ids = Array.isArray(documentIds) ? documentIds.filter(Boolean) : [];
+  const docsRes = ids.length
+    ? await db.query("SELECT * FROM documents WHERE id = ANY($1::uuid[]) AND user_id = $2", [ids, req.user.id])
+    : { rows: [] };
+
+  const recipient = to.trim();
+  const finalSubject = (subject || "").trim() || "(no subject)";
+
+  const appResult = await db.query(
+    `INSERT INTO applications (user_id, recipient_email, subject, body, status, sent_at, selected_document_ids)
+     VALUES ($1, $2, $3, $4, 'sent', now(), $5)
+     RETURNING *`,
+    [req.user.id, recipient, finalSubject, body, JSON.stringify(docsRes.rows.map((d) => d.id))]
+  );
+  const application = appResult.rows[0];
+
+  try {
+    await gmailService.sendApplicationEmail({
+      userId: req.user.id,
+      to: recipient,
+      subject: finalSubject,
+      body,
+      documents: docsRes.rows,
+    });
+  } catch (err) {
+    await db.query(`UPDATE applications SET status = 'draft', sent_at = NULL WHERE id = $1`, [application.id]);
+    throw err;
+  }
+
+  await db.query(
+    `INSERT INTO email_messages (application_id, user_id, direction, from_address, to_address, subject, body)
+     VALUES ($1, $2, 'outbound', $3, $4, $5, $6)`,
+    [application.id, req.user.id, userRow.rows[0]?.gmail_email || null, recipient, finalSubject, body]
+  );
+
+  res.status(201).json({ success: true, application });
+});
+
 module.exports = {
   getSummary,
   listApplications,
@@ -484,4 +564,5 @@ module.exports = {
   generateWithAI,
   applyToCompanies,
   sendApplication,
+  sendManualEmail,
 };

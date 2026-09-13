@@ -37,3 +37,17 @@ export function savePushToken(pushToken: string | null) {
     body: { pushToken },
   });
 }
+
+// Danger zone: clears the inbox (every email thread) only.
+export function eraseEmails() {
+  return apiRequest<{ success: boolean; message: string }>("/api/settings/erase-emails", {
+    method: "DELETE",
+  });
+}
+
+// Danger zone: clears companies, applications, emails, and documents.
+export function eraseAllData() {
+  return apiRequest<{ success: boolean; message: string }>("/api/settings/erase-all-data", {
+    method: "DELETE",
+  });
+}

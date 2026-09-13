@@ -1,7 +1,8 @@
 import React, { useCallback, useMemo, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, Pressable, Alert, Modal } from "react-native";
+import { View, Text, StyleSheet, ScrollView, Pressable, Alert, Modal, Image } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import * as DocumentPicker from "expo-document-picker";
+import * as ImagePicker from "expo-image-picker";
 import { Feather } from "@expo/vector-icons";
 import { Card } from "../../components/Card";
 import { Input } from "../../components/Input";
@@ -11,12 +12,14 @@ import { EmptyState } from "../../components/EmptyState";
 import { TagListInput, arrayToText, textToArray } from "../../components/TagListInput";
 import { useAuth } from "../../context/AuthContext";
 import * as profileService from "../../services/profileService";
+import { listApplications } from "../../services/applicationsService";
 import { ApiError } from "../../services/api";
 import { colors, spacing, typography, radius } from "../../constants/jobjetTheme";
+import { buildAchievements } from "../../utils/achievements";
 
 const DOCUMENT_TYPES = ["resume", "project_list", "cover_letter", "portfolio", "certificate", "other"];
 
-type Section = "personal" | "professional" | "documents" | null;
+type Section = "personal" | "professional" | "documents" | "interested" | null;
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -29,16 +32,22 @@ export default function ProfileScreen() {
   const [profile, setProfile] = useState<any>({});
   const [documents, setDocuments] = useState<any[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [openSection, setOpenSection] = useState<Section>(null);
+  const [achievements, setAchievements] = useState<ReturnType<typeof buildAchievements>["achievements"]>([]);
+  const [newPostTitle, setNewPostTitle] = useState("");
+  const [uploadingPost, setUploadingPost] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
-      const [profileRes, docsRes] = await Promise.all([
+      const [profileRes, docsRes, appsRes] = await Promise.all([
         profileService.getProfile(),
         profileService.listDocuments(),
+        listApplications().catch(() => ({ applications: [] })),
       ]);
       setProfile(profileRes.profile || {});
       setDocuments(docsRes.documents);
+      setAchievements(buildAchievements(appsRes.applications || []).achievements);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Couldn't load your profile.");
     } finally {
@@ -140,6 +149,115 @@ export default function ProfileScreen() {
     router.replace("/login");
   };
 
+  const handlePickAvatar = async () => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert("Permission needed", "Allow photo library access to set a profile picture.");
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+    if (result.canceled || !result.assets?.[0]) return;
+
+    const asset = result.assets[0];
+    setUploadingAvatar(true);
+    try {
+      const res = await profileService.uploadAvatar({
+        uri: asset.uri,
+        name: asset.fileName || "avatar.jpg",
+        mimeType: asset.mimeType,
+      });
+      setProfile((prev: any) => ({ ...prev, avatar_url: res.avatar_url }));
+    } catch (err) {
+      Alert.alert("Couldn't update photo", err instanceof Error ? err.message : "Please try again.");
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
+
+  // --- Interested Posts (job titles the candidate is targeting) ---
+  // Each post can have its own resume/project-list attached (via
+  // documents.post_tag) - when applying to a job whose title matches a
+  // tagged post, that specific pair gets used instead of the default.
+  //
+  // The backend requires at least 5 posts before it will save the list at
+  // all (see profileController.js) - so, unlike every other field on this
+  // screen, additions/removals are kept in local draft state and only sent
+  // once there are enough of them, with a running "X/5" counter so it's
+  // clear why the Save button is disabled until then.
+  const savedPosts: string[] = Array.isArray(profile.interested_posts) ? profile.interested_posts : [];
+  const MIN_INTERESTED_POSTS = 5;
+  const [draftPosts, setDraftPosts] = useState<string[] | null>(null);
+  const posts = draftPosts ?? savedPosts;
+  const postsDirty = draftPosts !== null;
+  const [savingPosts, setSavingPosts] = useState(false);
+
+  const documentForPost = useCallback(
+    (post: string) => documents.find((d) => d.post_tag && d.post_tag.toLowerCase() === post.toLowerCase()),
+    [documents]
+  );
+
+  const handleAddInterestedPost = () => {
+    const title = newPostTitle.trim();
+    if (!title) return;
+    if (posts.some((p) => p.toLowerCase() === title.toLowerCase())) {
+      setNewPostTitle("");
+      return;
+    }
+    setNewPostTitle("");
+    setDraftPosts([...posts, title]);
+  };
+
+  const handleRemoveInterestedPost = (post: string) => {
+    setDraftPosts(posts.filter((p) => p !== post));
+  };
+
+  const handleSaveInterestedPosts = async () => {
+    if (posts.length < MIN_INTERESTED_POSTS) return;
+    setSavingPosts(true);
+    try {
+      const res = await profileService.updateProfile({ interested_posts: posts });
+      setProfile((prev: any) => ({ ...prev, interested_posts: res.profile?.interested_posts ?? posts }));
+      setDraftPosts(null);
+    } catch (err) {
+      Alert.alert("Couldn't save", err instanceof ApiError ? err.message : "Please try again.");
+    } finally {
+      setSavingPosts(false);
+    }
+  };
+
+  const handleAttachPostDocument = async (post: string) => {
+    const result = await DocumentPicker.getDocumentAsync({
+      multiple: false,
+      copyToCacheDirectory: true,
+      type: [
+        "application/pdf",
+        "application/msword",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "image/png",
+        "image/jpeg",
+      ],
+    });
+    if (result.canceled || !result.assets?.[0]) return;
+
+    const asset = result.assets[0];
+    setUploadingPost(post);
+    try {
+      // Tagged as this specific post's resume - shows as "attached" (green)
+      // for this post going forward, without touching the default resume.
+      await profileService.uploadDocument({ uri: asset.uri, name: asset.name, mimeType: asset.mimeType }, "resume", post);
+      await load();
+    } catch (err) {
+      Alert.alert("Upload failed", err instanceof Error ? err.message : "Please try again.");
+    } finally {
+      setUploadingPost(null);
+    }
+  };
+
   const initial = (profile.full_name || user?.email || "?").trim().charAt(0).toUpperCase();
   const defaultResume = useMemo(
     () => documents.find((d) => d.document_type === "resume" && d.is_default),
@@ -153,14 +271,41 @@ export default function ProfileScreen() {
     <ScrollView contentContainerStyle={styles.container}>
       {/* Greeting card */}
       <Card style={styles.heroCard}>
-        <View style={styles.avatarLarge}>
-          <Text style={styles.avatarLargeText}>{initial}</Text>
-        </View>
+        <Pressable onPress={handlePickAvatar} disabled={uploadingAvatar} style={styles.avatarLarge}>
+          {profile.avatar_url ? (
+            <Image source={{ uri: profileService.resolveAvatarUrl(profile.avatar_url) || undefined }} style={styles.avatarImage} />
+          ) : (
+            <Text style={styles.avatarLargeText}>{initial}</Text>
+          )}
+          <View style={styles.avatarEditBadge}>
+            <Feather name="camera" size={11} color={colors.white} />
+          </View>
+        </Pressable>
         <View style={{ flex: 1 }}>
           <Text style={styles.heroGreeting}>Hello, {profile.full_name || "there"}</Text>
           <Text style={styles.heroEmail}>{user?.email}</Text>
         </View>
       </Card>
+
+      {/* Achievements */}
+      {achievements.length > 0 && (
+        <>
+          <Text style={styles.sectionTitle}>Achievements</Text>
+          <Card style={styles.achievementsCard}>
+            {achievements.map((a) => (
+              <View key={a.key} style={styles.achievementBadge}>
+                <View style={[styles.achievementIcon, a.unlocked && styles.achievementIconUnlocked]}>
+                  <Feather name={a.icon as any} size={18} color={a.unlocked ? colors.white : colors.textMuted} />
+                </View>
+                <Text style={[styles.achievementTitle, !a.unlocked && styles.achievementTitleLocked]} numberOfLines={1}>
+                  {a.title}
+                </Text>
+                <Text style={styles.achievementProgress}>{a.progressLabel}</Text>
+              </View>
+            ))}
+          </Card>
+        </>
+      )}
 
       {/* Quick status row */}
       <View style={styles.statsRow}>
@@ -218,6 +363,101 @@ export default function ProfileScreen() {
                   </Pressable>
                 </View>
               ))
+            )}
+          </View>
+        )}
+      </Card>
+
+      {/* Section: Interested Posts */}
+      <Text style={styles.sectionTitle}>Interested Job Posts</Text>
+      <Card style={styles.listCard}>
+        <ListRow
+          icon="bookmark"
+          title="Interested Posts"
+          subtitle={
+            savedPosts.length > 0
+              ? `${savedPosts.length} post${savedPosts.length === 1 ? "" : "s"} saved`
+              : "Add at least 5 roles you're targeting, with a resume for each"
+          }
+          onPress={() => setOpenSection(openSection === "interested" ? null : "interested")}
+          expanded={openSection === "interested"}
+        />
+        {openSection === "interested" && (
+          <View style={styles.expandedArea}>
+            <View style={styles.addPostRow}>
+              <View style={{ flex: 1 }}>
+                <Input
+                  value={newPostTitle}
+                  onChangeText={setNewPostTitle}
+                  placeholder="e.g. Backend Developer"
+                  onSubmitEditing={handleAddInterestedPost}
+                />
+              </View>
+              <Pressable onPress={handleAddInterestedPost} style={styles.addPostButton}>
+                <Feather name="plus" size={18} color={colors.white} />
+              </Pressable>
+            </View>
+
+            <Text style={styles.postsCounter}>
+              {posts.length}/{MIN_INTERESTED_POSTS} minimum to save
+              {postsDirty ? " · unsaved changes" : ""}
+            </Text>
+
+            {posts.length === 0 ? (
+              <EmptyState
+                title="No interested posts yet"
+                description="Add job titles you're targeting - JobJet will only flag a company as a match when it actually has one of these roles open. You need at least 5 before they can be saved."
+              />
+            ) : (
+              posts.map((post) => {
+                const attachedDoc = documentForPost(post);
+                const isUploading = uploadingPost === post;
+                return (
+                  <View key={post} style={styles.postRow}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.docName}>{post}</Text>
+                      {attachedDoc ? (
+                        <View style={styles.attachedRow}>
+                          <Feather name="check-circle" size={13} color="#16A34A" />
+                          <Text style={[styles.attachedText, { color: "#16A34A" }]} numberOfLines={1}>
+                            {attachedDoc.name}
+                          </Text>
+                        </View>
+                      ) : (
+                        <Text style={styles.docMeta}>No document attached yet</Text>
+                      )}
+                    </View>
+
+                    {attachedDoc ? (
+                      <Pressable onPress={() => handleAttachPostDocument(post)} disabled={isUploading} style={styles.docAction}>
+                        <Text style={styles.docActionText}>{isUploading ? "..." : "Change"}</Text>
+                      </Pressable>
+                    ) : (
+                      <Pressable
+                        onPress={() => handleAttachPostDocument(post)}
+                        disabled={isUploading}
+                        style={styles.attachPill}
+                      >
+                        <Feather name="upload" size={12} color={colors.textPrimary} />
+                        <Text style={styles.uploadPillText}>{isUploading ? "Uploading..." : "Attach"}</Text>
+                      </Pressable>
+                    )}
+                    <Pressable onPress={() => handleRemoveInterestedPost(post)} style={styles.docAction}>
+                      <Feather name="x" size={16} color={colors.textMuted} />
+                    </Pressable>
+                  </View>
+                );
+              })
+            )}
+
+            {postsDirty && (
+              <Button
+                label={posts.length < MIN_INTERESTED_POSTS ? `Add ${MIN_INTERESTED_POSTS - posts.length} more to save` : "Save Posts"}
+                onPress={handleSaveInterestedPosts}
+                loading={savingPosts}
+                disabled={posts.length < MIN_INTERESTED_POSTS}
+                style={{ marginTop: spacing.sm }}
+              />
             )}
           </View>
         )}
@@ -368,10 +608,72 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
     alignItems: "center",
     justifyContent: "center",
+    position: "relative",
   },
   avatarLargeText: { ...typography.h2, color: colors.white },
+  avatarImage: { width: 56, height: 56, borderRadius: 28 },
+  avatarEditBadge: {
+    position: "absolute",
+    bottom: -2,
+    right: -2,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: colors.textPrimary,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 2,
+    borderColor: colors.white,
+  },
   heroGreeting: { ...typography.h3, color: colors.textPrimary },
   heroEmail: { ...typography.small, color: colors.textMuted, marginTop: 2 },
+
+  achievementsCard: { flexDirection: "row", flexWrap: "wrap", gap: spacing.md, paddingVertical: spacing.md },
+  achievementBadge: { width: 84, alignItems: "center", gap: 2 },
+  achievementIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: colors.surfaceMuted,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 4,
+  },
+  achievementIconUnlocked: { backgroundColor: colors.primary },
+  achievementTitle: { ...typography.tiny, color: colors.textPrimary, fontWeight: "700", textAlign: "center" },
+  achievementTitleLocked: { color: colors.textMuted },
+  achievementProgress: { ...typography.tiny, color: colors.textMuted },
+
+  addPostRow: { flexDirection: "row", alignItems: "center", gap: spacing.xs },
+  postsCounter: { ...typography.tiny, color: colors.textMuted, marginTop: spacing.xs },
+  addPostButton: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.sm,
+    backgroundColor: colors.primary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  postRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    paddingVertical: spacing.sm,
+    gap: spacing.sm,
+  },
+  attachedRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 2 },
+  attachedText: { ...typography.small, color: colors.success, flexShrink: 1 },
+  attachPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
+    borderRadius: radius.full,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
+  },
 
   statsRow: { flexDirection: "row", gap: spacing.sm },
   statPill: {

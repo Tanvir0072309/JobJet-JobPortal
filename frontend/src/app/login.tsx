@@ -31,7 +31,7 @@ export default function LoginScreen() {
       // check explicitly here instead of trusting the (main) layout's
       // gate to catch up before this screen has already navigated away.
       const connected = await refreshGmailStatus();
-      router.replace(connected ? "/(main)/applications" : "/connect-gmail");
+      router.replace(connected ? "/(main)/emails" : "/connect-gmail");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Something went wrong. Please try again.");
     } finally {

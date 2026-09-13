@@ -7,6 +7,7 @@ export type Company = {
   website: string | null;
   career_page_url: string | null;
   work_mode: string | null;
+  company_size: "startup" | "small" | "mid" | "large" | "unknown" | null;
   career_details_extracted: boolean;
   jobs: any[] | null;
   contacts: any[] | null;
@@ -16,7 +17,7 @@ export function listCompanies() {
   return apiRequest<{ success: boolean; companies: Company[] }>("/api/companies");
 }
 
-export type DiscoverResult = { success: boolean; inserted: number; found?: number; message: string };
+export type DiscoverResult = { success: boolean; inserted: number; found?: number; companies: Company[]; message: string };
 export type IndustryFocus = "it" | "management" | "any";
 
 // Asks Groq (using the user's own Groq API key, configured in Settings) for

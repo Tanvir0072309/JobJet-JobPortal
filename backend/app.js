@@ -1,5 +1,6 @@
 const express = require("express");
 const cors = require("cors");
+const path = require("path");
 const env = require("./src/config/env");
 const { notFoundHandler, errorHandler } = require("./src/middleware/errorHandler");
 
@@ -24,6 +25,12 @@ const app = express();
 
 app.use(cors({ origin: env.corsOrigin }));
 app.use(express.json());
+
+// Profile pictures (and nothing else - resumes/documents are intentionally
+// NOT served from here, they stay behind requireAuth via their own routes)
+// are static, publicly-reachable files so <Image> tags in the app can load
+// them directly without an Authorization header.
+app.use("/uploads/avatars", express.static(path.join(__dirname, "uploads", "avatars")));
 
 app.get("/", (req, res) => {
   res.json({

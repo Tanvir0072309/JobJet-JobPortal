@@ -23,7 +23,7 @@ const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const office1 = require("../../assets/images/onboarding/office-1.jpg");
 const office2 = require("../../assets/images/onboarding/office-2.jpg");
 const office3 = require("../../assets/images/onboarding/office-3.jpg");
-const personImage = require("../../assets/images/onboarding/person.png");
+const personImage = require("../../assets/images/onboarding/team.png");
 
 type Slide = {
   key: string;
@@ -179,7 +179,7 @@ function SlidePanel({ slide, insets }: { slide: Slide; insets: { top: number; bo
       <View pointerEvents="none" style={styles.heroGlowOne} />
       <View pointerEvents="none" style={styles.heroGlowTwo} />
       <View style={styles.personWrap}>
-        <Image source={personImage} style={styles.personImage} contentFit="contain" />
+        <Image source={personImage} style={styles.personImage} contentFit="cover" />
       </View>
       <View style={styles.panelContentLower}>
         <Text style={[styles.title, styles.titleLight]}>
@@ -268,10 +268,19 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "flex-end",
     paddingTop: spacing.xxl,
+    paddingHorizontal: spacing.lg,
   },
   personImage: {
-    width: SCREEN_WIDTH * 0.82,
-    height: SCREEN_WIDTH * 1.05,
+    width: SCREEN_WIDTH * 0.86,
+    height: SCREEN_WIDTH * 0.86 * (350 / 625),
+    borderRadius: radius.lg,
+    borderWidth: 4,
+    borderColor: "rgba(255,255,255,0.9)",
+    shadowColor: colors.primaryDark,
+    shadowOpacity: 0.25,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 12 },
+    elevation: 8,
   },
 
   heroGlowOne: {

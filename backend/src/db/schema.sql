@@ -74,10 +74,14 @@ CREATE TABLE IF NOT EXISTS profiles (
   -- saving. Used to match a specific resume/project-list to the post it was
   -- written for (see documents.post_tag below).
   interested_posts JSONB DEFAULT '[]'::jsonb,
+  -- Public-ish path (served from /uploads/avatars/...) of the candidate's
+  -- profile picture. Set via POST /api/profile/avatar.
+  avatar_url TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS interested_posts JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS avatar_url TEXT;
 
 -- =========================================================
 -- DOCUMENTS

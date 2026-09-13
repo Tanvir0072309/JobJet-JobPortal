@@ -136,6 +136,40 @@ const updateApplicationSettings = asyncHandler(async (req, res) => {
   res.json({ success: true, settings: result.rows[0] });
 });
 
+// DELETE /api/settings/erase-emails - clears the inbox: every email thread
+// (application + its email_messages) that has ever been sent or received.
+// Saved companies/jobs/contacts and uploaded documents are left untouched -
+// this only wipes the email/inbox side of things.
+const eraseEmails = asyncHandler(async (req, res) => {
+  await db.query("DELETE FROM applications WHERE user_id = $1", [req.user.id]);
+  // email_messages cascade-deletes with their application, but this also
+  // catches any orphaned rows just in case.
+  await db.query("DELETE FROM email_messages WHERE user_id = $1", [req.user.id]);
+  res.json({ success: true, message: "All emails have been erased." });
+});
+
+// DELETE /api/settings/erase-all-data - wipes every piece of JobJet-
+// generated data for this account: discovered companies/jobs/contacts,
+// applications, email threads, and uploaded documents (both the DB rows and
+// the files on disk). The account itself (login, profile fields, saved API
+// keys, Gmail connection) is left in place - this is "start fresh with the
+// app's data", not "delete my account".
+const eraseAllData = asyncHandler(async (req, res) => {
+  const fs = require("fs/promises");
+  const docsRes = await db.query("SELECT file_path FROM documents WHERE user_id = $1", [req.user.id]);
+
+  await db.query("DELETE FROM applications WHERE user_id = $1", [req.user.id]);
+  await db.query("DELETE FROM email_messages WHERE user_id = $1", [req.user.id]);
+  await db.query("DELETE FROM companies WHERE user_id = $1", [req.user.id]); // jobs/contacts cascade
+  await db.query("DELETE FROM documents WHERE user_id = $1", [req.user.id]);
+
+  await Promise.all(
+    docsRes.rows.map((row) => fs.unlink(row.file_path).catch(() => {}))
+  );
+
+  res.json({ success: true, message: "All app data has been erased. Your account and settings are unchanged." });
+});
+
 module.exports = {
   listApiCredentials,
   saveApiCredential,
@@ -143,4 +177,6 @@ module.exports = {
   savePushToken,
   getApplicationSettings,
   updateApplicationSettings,
+  eraseEmails,
+  eraseAllData,
 };

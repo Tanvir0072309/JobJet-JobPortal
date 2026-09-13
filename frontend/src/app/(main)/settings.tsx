@@ -7,6 +7,7 @@ import { Button } from "../../components/Button";
 import { LoadingState, ErrorState } from "../../components/LoadingState";
 import { useAuth } from "../../context/AuthContext";
 import * as settingsService from "../../services/settingsService";
+import { clearScreenCache } from "../../utils/screenCache";
 import { connectGmail, disconnectGmail } from "../../services/gmailService";
 import { ApiError } from "../../services/api";
 import { getCached, setCached } from "../../utils/screenCache";
@@ -37,6 +38,10 @@ export default function SettingsScreen() {
   const [appSettings, setAppSettings] = useState<any>(cached?.appSettings ?? {});
   const [savingSettings, setSavingSettings] = useState(false);
   const [settingsMessage, setSettingsMessage] = useState<string | null>(null);
+
+  const [erasingEmails, setErasingEmails] = useState(false);
+  const [erasingAll, setErasingAll] = useState(false);
+  const [eraseMessage, setEraseMessage] = useState<string | null>(null);
 
   // This screen fully remounts every time you switch away from and back to
   // the Settings tab (see screenCache.ts) - the cache above just lets that
@@ -165,6 +170,60 @@ export default function SettingsScreen() {
     router.replace("/login");
   };
 
+  const handleEraseEmails = () => {
+    Alert.alert(
+      "Erase all emails?",
+      "This permanently deletes your entire inbox (all sent/received email threads). Companies, jobs, and documents are kept. This can't be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Erase Emails",
+          style: "destructive",
+          onPress: async () => {
+            setErasingEmails(true);
+            setEraseMessage(null);
+            try {
+              const res = await settingsService.eraseEmails();
+              clearScreenCache();
+              setEraseMessage(res.message || "Emails erased.");
+            } catch (err) {
+              setEraseMessage(err instanceof ApiError ? err.message : "Couldn't erase emails.");
+            } finally {
+              setErasingEmails(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleEraseAllData = () => {
+    Alert.alert(
+      "Erase all data?",
+      "This permanently deletes every company, application, email, and document in JobJet. Your account, login, and saved settings stay. This can't be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Erase Everything",
+          style: "destructive",
+          onPress: async () => {
+            setErasingAll(true);
+            setEraseMessage(null);
+            try {
+              const res = await settingsService.eraseAllData();
+              clearScreenCache();
+              setEraseMessage(res.message || "All data erased.");
+            } catch (err) {
+              setEraseMessage(err instanceof ApiError ? err.message : "Couldn't erase data.");
+            } finally {
+              setErasingAll(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   if (loading) return <LoadingState label="Loading settings..." />;
   if (error) return <ErrorState message={error} onRetry={load} />;
 
@@ -211,9 +270,15 @@ export default function SettingsScreen() {
       <Card style={styles.card}>
         <Text style={styles.rowLabel}>Gmail connection</Text>
         {user?.gmailConnected ? (
-          <Text style={styles.rowValue}>Connected ({user.gmailEmail})</Text>
+          <View style={styles.statusRow}>
+            <View style={styles.statusDotGreen} />
+            <Text style={styles.rowValue}>Connected ({user.gmailEmail})</Text>
+          </View>
         ) : (
-          <Text style={styles.rowValueMuted}>Not connected - applications can't be sent yet</Text>
+          <View style={styles.statusRow}>
+            <View style={styles.statusDotGray} />
+            <Text style={styles.rowValueMuted}>Not connected - applications can't be sent yet</Text>
+          </View>
         )}
 
         {gmailError ? <Text style={styles.errorText}>{gmailError}</Text> : null}
@@ -293,6 +358,35 @@ export default function SettingsScreen() {
         {settingsMessage ? <Text style={styles.saveMessage}>{settingsMessage}</Text> : null}
         <Button label="Save Settings" onPress={handleSaveAppSettings} loading={savingSettings} />
       </Card>
+
+      <Text style={styles.sectionTitle}>Danger Zone</Text>
+      <Card style={styles.card}>
+        <Text style={styles.rowLabel}>Erase Email</Text>
+        <Text style={styles.helperNote}>Deletes your entire inbox - every sent/received email thread.</Text>
+        <Button
+          label="Erase Emails"
+          variant="danger"
+          onPress={handleEraseEmails}
+          loading={erasingEmails}
+          style={{ marginTop: spacing.sm }}
+        />
+
+        <View style={styles.divider} />
+
+        <Text style={styles.rowLabel}>Erase All Data</Text>
+        <Text style={styles.helperNote}>
+          Deletes companies, applications, emails, and documents. Your account and login stay intact.
+        </Text>
+        <Button
+          label="Erase All Data"
+          variant="danger"
+          onPress={handleEraseAllData}
+          loading={erasingAll}
+          style={{ marginTop: spacing.sm }}
+        />
+
+        {eraseMessage ? <Text style={styles.saveMessage}>{eraseMessage}</Text> : null}
+      </Card>
     </ScrollView>
   );
 }
@@ -347,6 +441,9 @@ const styles = StyleSheet.create({
   rowValue: { ...typography.bodyBold, color: colors.textPrimary, marginBottom: spacing.xs },
   rowValueMuted: { ...typography.body, color: colors.textMuted, marginBottom: spacing.xs, fontStyle: "italic" },
   errorText: { ...typography.small, color: colors.danger, marginBottom: spacing.xs },
+  statusRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: spacing.xs },
+  statusDotGreen: { width: 9, height: 9, borderRadius: 5, backgroundColor: "#22C55E" },
+  statusDotGray: { width: 9, height: 9, borderRadius: 5, backgroundColor: colors.textMuted },
   divider: { height: 1, backgroundColor: colors.border, marginVertical: spacing.md },
   helperNote: { ...typography.small, color: colors.textMuted, marginTop: spacing.sm, fontStyle: "italic" },
   credentialActions: { flexDirection: "row", gap: spacing.sm, marginTop: spacing.xs },

@@ -97,4 +97,28 @@ const updateProfile = asyncHandler(async (req, res) => {
   res.json({ success: true, profile: result.rows[0] });
 });
 
-module.exports = { getProfile, updateProfile };
+// POST /api/profile/avatar (multipart, field name "avatar") - saves the
+// uploaded image path (relative, served statically from /uploads) as this
+// user's profile picture. Any previous avatar file is left in place (best
+// effort cleanup only) since losing a photo on a failed delete is worse
+// than a few orphaned files on disk.
+const uploadAvatar = asyncHandler(async (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ success: false, message: "No image uploaded." });
+  }
+
+  const relativePath = `/uploads/avatars/${req.file.filename}`;
+
+  const result = await db.query(
+    `UPDATE profiles SET avatar_url = $1, updated_at = now() WHERE user_id = $2 RETURNING *`,
+    [relativePath, req.user.id]
+  );
+
+  if (result.rows.length === 0) {
+    await db.query("INSERT INTO profiles (user_id, avatar_url) VALUES ($1, $2)", [req.user.id, relativePath]);
+  }
+
+  res.json({ success: true, avatar_url: relativePath });
+});
+
+module.exports = { getProfile, updateProfile, uploadAvatar };

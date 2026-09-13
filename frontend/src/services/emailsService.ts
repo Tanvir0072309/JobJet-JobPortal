@@ -9,6 +9,7 @@ import { listApplications, listUnreadReplies, getApplication, type Application }
 export type InboxItem = {
   id: string;
   sender: string;
+  senderWebsite: string | null;
   subject: string;
   snippet: string;
   date: string | null;
@@ -28,6 +29,7 @@ export async function listInbox(): Promise<InboxItem[]> {
       return {
         id: app.id,
         sender: app.company_name || "Unknown company",
+        senderWebsite: (app as any).company_website || null,
         subject: app.subject || app.job_title || "Application update",
         snippet: (reply?.body || app.body || "No message content yet.").replace(/\s+/g, " ").trim(),
         date: app.updated_at,

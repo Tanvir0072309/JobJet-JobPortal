@@ -12,12 +12,12 @@ type TabItem = {
   icon: keyof typeof Feather.glyphMap;
 };
 
-// Four tabs, one job each — Find Jobs and the old centre "Apply" button
-// pointed at the same screen, so they've been merged into one.
+// Four tabs, one job each — Applications has been replaced with a direct
+// "Send Email" composer (To/From/Write message) for manually sending mail.
 const TABS: TabItem[] = [
   { key: "mail", label: "Mail", href: "/(main)/emails", icon: "mail" },
   { key: "find", label: "Find Jobs", href: "/(main)/find-companies", icon: "search" },
-  { key: "applications", label: "Applications", href: "/(main)/applications", icon: "briefcase" },
+  { key: "send", label: "Send Email", href: "/(main)/send-email", icon: "send" },
   { key: "settings", label: "Settings", href: "/(main)/settings", icon: "settings" },
 ];
 

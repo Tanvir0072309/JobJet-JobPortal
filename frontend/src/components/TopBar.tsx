@@ -10,7 +10,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/emails": "Inbox",
   "/dashboard": "Home",
   "/find-companies": "Find Companies",
-  "/applications": "Applications",
+  "/send-email": "Send Email",
   "/profile": "Profile",
   "/settings": "Settings",
 };
