@@ -51,3 +51,14 @@ export function eraseAllData() {
     method: "DELETE",
   });
 }
+
+// Danger zone: permanently deletes the user's row from the database (and
+// everything that cascades from it - login, companies, applications,
+// emails, documents, saved API keys, Gmail connection). Unlike
+// eraseAllData, the account itself is gone after this - the caller should
+// log the user out and send them to the login screen right after.
+export function deleteAccount() {
+  return apiRequest<{ success: boolean; message: string }>("/api/settings/delete-account", {
+    method: "DELETE",
+  });
+}

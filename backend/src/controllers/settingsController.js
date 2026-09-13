@@ -170,6 +170,24 @@ const eraseAllData = asyncHandler(async (req, res) => {
   res.json({ success: true, message: "All app data has been erased. Your account and settings are unchanged." });
 });
 
+// DELETE /api/settings/delete-account - actually deletes the user's row
+// from the database (not just their data). Every other table references
+// users(id) with ON DELETE CASCADE (see schema.sql), so this one query wipes
+// the account, login, saved API keys, Gmail connection, companies,
+// applications, emails, and document rows all in one go. This is the "the
+// whole user should be gone from the database" action - distinct from
+// "Erase All Data" above, which deliberately keeps the account itself.
+const deleteAccount = asyncHandler(async (req, res) => {
+  const fs = require("fs/promises");
+  const docsRes = await db.query("SELECT file_path FROM documents WHERE user_id = $1", [req.user.id]);
+
+  await db.query("DELETE FROM users WHERE id = $1", [req.user.id]);
+
+  await Promise.all(docsRes.rows.map((row) => fs.unlink(row.file_path).catch(() => {})));
+
+  res.json({ success: true, message: "Your account and all associated data have been permanently deleted." });
+});
+
 module.exports = {
   listApiCredentials,
   saveApiCredential,
@@ -179,4 +197,5 @@ module.exports = {
   updateApplicationSettings,
   eraseEmails,
   eraseAllData,
+  deleteAccount,
 };

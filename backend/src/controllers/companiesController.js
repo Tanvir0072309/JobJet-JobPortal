@@ -82,17 +82,16 @@ const discoverCompanies = asyncHandler(async (req, res) => {
     });
   }
 
-  // Every new search replaces the old one - old search history shouldn't
-  // pile up below the fresh results. Companies already applied to are kept
-  // (their application record still references them via SET NULL), only
-  // the leftover, un-applied-to companies from previous searches are
-  // cleared out. (jobs / company_contacts cascade-delete automatically.)
-  await db.query(
-    `DELETE FROM companies
-     WHERE user_id = $1
-       AND id NOT IN (SELECT company_id FROM applications WHERE company_id IS NOT NULL)`,
-    [req.user.id]
-  );
+  // Every new search replaces the old one entirely - searching a different
+  // location/country should never leave old results sitting around mixed in
+  // with the new ones. This used to keep any company that already had an
+  // application against it, which meant previously-applied-to companies from
+  // an earlier search (e.g. a different country) kept reappearing forever.
+  // Applications themselves are untouched (company_id just goes NULL via
+  // ON DELETE SET NULL - the application record and its history stay), only
+  // the companies list is fully cleared before inserting this search's
+  // fresh batch. (jobs / company_contacts cascade-delete automatically.)
+  await db.query(`DELETE FROM companies WHERE user_id = $1`, [req.user.id]);
 
   let inserted = 0;
   let emailsFound = 0;

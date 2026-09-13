@@ -16,7 +16,10 @@
         "foregroundImage": "./assets/images/android-icon-foreground.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.tanvir0072.jobjet"
+      "package": "com.tanvir0072.jobjet",
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "output": "static",
@@ -37,7 +40,8 @@
         {
           "android": {
             "enableProguardInReleaseBuilds": true,
-            "enableShrinkResourcesInReleaseBuilds": true
+            "enableShrinkResourcesInReleaseBuilds": true,
+            "enableMinifyInReleaseBuilds": true
           }
         }
       ],
@@ -63,7 +67,7 @@
       "router": {},
       "apiUrl": "https://jobjet-jobportal.onrender.com",
       "eas": {
-        "projectId": "5f55e381-44fe-4010-829f-8c7883f003d5"
+        "projectId": "b43a35f0-945a-467c-bc0d-05751f324431"
       }
     }
   }

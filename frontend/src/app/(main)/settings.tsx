@@ -41,6 +41,7 @@ export default function SettingsScreen() {
 
   const [erasingEmails, setErasingEmails] = useState(false);
   const [erasingAll, setErasingAll] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
   const [eraseMessage, setEraseMessage] = useState<string | null>(null);
 
   // This screen fully remounts every time you switch away from and back to
@@ -224,6 +225,33 @@ export default function SettingsScreen() {
     );
   };
 
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      "Delete your account?",
+      "This permanently deletes your entire account from JobJet's database - your login, profile, companies, applications, emails, documents, and saved settings. There is no undo. You'll be signed out immediately.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete Account",
+          style: "destructive",
+          onPress: async () => {
+            setDeletingAccount(true);
+            setEraseMessage(null);
+            try {
+              await settingsService.deleteAccount();
+              clearScreenCache();
+              await logout();
+              router.replace("/login");
+            } catch (err) {
+              setEraseMessage(err instanceof ApiError ? err.message : "Couldn't delete your account.");
+              setDeletingAccount(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   if (loading) return <LoadingState label="Loading settings..." />;
   if (error) return <ErrorState message={error} onRetry={load} />;
 
@@ -382,6 +410,21 @@ export default function SettingsScreen() {
           variant="danger"
           onPress={handleEraseAllData}
           loading={erasingAll}
+          style={{ marginTop: spacing.sm }}
+        />
+
+        <View style={styles.divider} />
+
+        <Text style={styles.rowLabel}>Delete Account</Text>
+        <Text style={styles.helperNote}>
+          Permanently deletes your entire user account from the database - login, profile, companies,
+          applications, emails, documents, and settings. This can't be undone.
+        </Text>
+        <Button
+          label="Delete Account"
+          variant="danger"
+          onPress={handleDeleteAccount}
+          loading={deletingAccount}
           style={{ marginTop: spacing.sm }}
         />
 

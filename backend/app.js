@@ -16,6 +16,14 @@ const gmailRoutes = require("./src/routes/gmailRoutes");
 
 const app = express();
 
+// Make sure the uploads folders exist before anything tries to read/write to
+// them - a fresh clone/deploy (or a redeploy on a host with a wiped disk)
+// otherwise throws "ENOENT: no such file or directory" the first time a
+// document is uploaded or an avatar is saved, since Node/multer don't create
+// missing parent folders on their own for every code path that touches them.
+const fs = require("fs");
+fs.mkdirSync(path.join(__dirname, "uploads", "avatars"), { recursive: true });
+
 // NOTE: the old background IMAP reply-poller (replyNotifier.js /
 // imapService.js) has been removed along with the SMTP/App Password system
 // it depended on. The Gmail OAuth connection this app now uses is scoped to
