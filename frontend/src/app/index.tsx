@@ -1,7 +1,7 @@
 import React from "react";
 import { Redirect } from "expo-router";
 import { useAuth } from "../context/AuthContext";
-import { LoadingState } from "../components/LoadingState";
+import { StartupLoadingState } from "../components/LoadingState";
 
 // Entry point: send authenticated users straight to the Mail/inbox screen
 // (the required first page after login), everyone else to the Welcome
@@ -10,7 +10,7 @@ import { LoadingState } from "../components/LoadingState";
 export default function Index() {
   const { isAuthenticated, isBootstrapping } = useAuth();
 
-  if (isBootstrapping) return <LoadingState label="Starting JobJet..." />;
+  if (isBootstrapping) return <StartupLoadingState />;
 
   return <Redirect href={isAuthenticated ? "/(main)/emails" : "/welcome"} />;
 }

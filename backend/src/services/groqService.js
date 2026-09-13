@@ -104,7 +104,7 @@ function buildDiscoveryPrompt({ location, industry, limit, workMode }) {
     `List up to ${limit} real, currently operating companies that have an office in or near: ${location}.`,
     industryLine,
     workModeLine,
-    "Give a genuine MIX of company sizes - do NOT only list large, famous companies. Actively include smaller startups (roughly 10-50 employees) that are actually hiring right now, alongside any bigger names, and list the smaller companies first.",
+    "Give a genuine MIX of company sizes, but weight it heavily toward startups: at least 4 out of every 5 companies you list should be real startups (roughly 5-50 employees) that are actively hiring right now. Only include a single larger/established company if one is a particularly strong, currently-hiring fit - never let big, famous names dominate the list.",
     "Only include a company if you are reasonably confident it has a real, currently active careers/jobs page with at least one genuinely open role right now - if you can't name a specific, currently plausible open role, skip that company entirely.",
     "Only include companies you are reasonably confident actually exist and actively hire - do not invent companies.",
     "For each company give: its official website domain, its careers/jobs page URL (required - do not return a company without one), a short industry label, an approximate company size ('startup' for under ~50 employees, 'small' for ~50-200, 'mid' for ~200-1000, 'large' for 1000+), typical work mode (remote/hybrid/onsite/unknown), and 1-3 roles this company is plausibly hiring for right now (title + a one-sentence description + that specific role's work mode).",

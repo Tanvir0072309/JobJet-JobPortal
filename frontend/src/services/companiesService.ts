@@ -18,7 +18,17 @@ export function listCompanies() {
 }
 
 export type DiscoverResult = { success: boolean; inserted: number; found?: number; companies: Company[]; message: string };
-export type IndustryFocus = "it" | "management" | "any";
+export type IndustryFocus =
+  | "it"
+  | "management"
+  | "finance"
+  | "healthcare"
+  | "retail"
+  | "marketing"
+  | "education"
+  | "manufacturing"
+  | "hospitality"
+  | "any";
 
 // Asks Groq (using the user's own Groq API key, configured in Settings) for
 // real companies near `location` that match `industry`, along with their

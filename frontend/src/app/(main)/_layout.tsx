@@ -4,13 +4,13 @@ import { Redirect, Slot } from "expo-router";
 import { useAuth } from "../../context/AuthContext";
 import { TopBar } from "../../components/TopBar";
 import { BottomTabBar } from "../../components/BottomTabBar";
-import { LoadingState } from "../../components/LoadingState";
+import { StartupLoadingState } from "../../components/LoadingState";
 import { colors } from "../../constants/jobjetTheme";
 
 export default function MainLayout() {
   const { isAuthenticated, isBootstrapping, user } = useAuth();
 
-  if (isBootstrapping) return <LoadingState label="Loading JobJet..." />;
+  if (isBootstrapping) return <StartupLoadingState label="Loading JobJet..." />;
   if (!isAuthenticated) return <Redirect href="/login" />;
   // Onboarding isn't considered complete until Gmail is connected (see
   // connect-gmail.tsx) - every screen under (main) is gated on this, not

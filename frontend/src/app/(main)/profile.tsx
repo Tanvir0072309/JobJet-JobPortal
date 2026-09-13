@@ -2,7 +2,6 @@ import React, { useCallback, useMemo, useState } from "react";
 import { View, Text, StyleSheet, ScrollView, Pressable, Alert, Modal, Image } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import * as DocumentPicker from "expo-document-picker";
-import * as ImagePicker from "expo-image-picker";
 import { Feather } from "@expo/vector-icons";
 import { Card } from "../../components/Card";
 import { Input } from "../../components/Input";
@@ -12,7 +11,7 @@ import { EmptyState } from "../../components/EmptyState";
 import { TagListInput, arrayToText, textToArray } from "../../components/TagListInput";
 import { useAuth } from "../../context/AuthContext";
 import * as profileService from "../../services/profileService";
-import { listApplications } from "../../services/applicationsService";
+import { listApplications, getSendingLimitStatus, type SendingLimitStatus } from "../../services/applicationsService";
 import { ApiError } from "../../services/api";
 import { colors, spacing, typography, radius } from "../../constants/jobjetTheme";
 import { buildAchievements } from "../../utils/achievements";
@@ -35,19 +34,22 @@ export default function ProfileScreen() {
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [openSection, setOpenSection] = useState<Section>(null);
   const [achievements, setAchievements] = useState<ReturnType<typeof buildAchievements>["achievements"]>([]);
+  const [sendingLimit, setSendingLimit] = useState<SendingLimitStatus | null>(null);
   const [newPostTitle, setNewPostTitle] = useState("");
   const [uploadingPost, setUploadingPost] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
-      const [profileRes, docsRes, appsRes] = await Promise.all([
+      const [profileRes, docsRes, appsRes, limitRes] = await Promise.all([
         profileService.getProfile(),
         profileService.listDocuments(),
         listApplications().catch(() => ({ applications: [] })),
+        getSendingLimitStatus().catch(() => null),
       ]);
       setProfile(profileRes.profile || {});
       setDocuments(docsRes.documents);
       setAchievements(buildAchievements(appsRes.applications || []).achievements);
+      setSendingLimit(limitRes);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Couldn't load your profile.");
     } finally {
@@ -150,25 +152,24 @@ export default function ProfileScreen() {
   };
 
   const handlePickAvatar = async () => {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      Alert.alert("Permission needed", "Allow photo library access to set a profile picture.");
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.8,
-    });
-    if (result.canceled || !result.assets?.[0]) return;
-
-    const asset = result.assets[0];
-    setUploadingAvatar(true);
+    // Uses the same expo-document-picker flow as resume/document uploads
+    // above (handleUpload) instead of expo-image-picker, which was
+    // silently failing to open/return a file for some users. Restricting
+    // the picker to image types keeps the "pick a photo" experience while
+    // reusing the exact upload mechanism that already works reliably.
     try {
+      const result = await DocumentPicker.getDocumentAsync({
+        multiple: false,
+        copyToCacheDirectory: true,
+        type: ["image/png", "image/jpeg", "image/webp"],
+      });
+      if (result.canceled || !result.assets?.[0]) return;
+
+      const asset = result.assets[0];
+      setUploadingAvatar(true);
       const res = await profileService.uploadAvatar({
         uri: asset.uri,
-        name: asset.fileName || "avatar.jpg",
+        name: asset.name || "avatar.jpg",
         mimeType: asset.mimeType,
       });
       setProfile((prev: any) => ({ ...prev, avatar_url: res.avatar_url }));
@@ -317,6 +318,14 @@ export default function ProfileScreen() {
           <Text style={styles.statNumber}>{defaultResume ? "Yes" : "No"}</Text>
           <Text style={styles.statLabel}>Resume set</Text>
         </View>
+        {sendingLimit ? (
+          <View style={styles.statPill}>
+            <Text style={styles.statNumber}>
+              {sendingLimit.sentToday}/{sendingLimit.limit}
+            </Text>
+            <Text style={styles.statLabel}>Emails today</Text>
+          </View>
+        ) : null}
       </View>
 
       {/* Section: Documents */}

@@ -292,34 +292,21 @@ async function buildMimeMessage({ fromEmail, fromName, to, subject, body, docume
     Buffer.from(body || "", "utf8").toString("base64"),
   ].join("\r\n");
 
-  // A document row can point at a file that's no longer on disk (e.g. the
-  // server's disk was wiped/redeployed since it was uploaded, or the file
-  // was moved/deleted outside the app). Previously a single missing file
-  // (ENOENT) threw out of Promise.all and killed the ENTIRE send - the email
-  // never went out even though the message body itself was fine. Now a
-  // missing/unreadable attachment is just skipped (logged, not fatal) so the
-  // email still sends; only the attachments that actually exist are included.
-  const attachmentResults = await Promise.all(
+  const attachmentParts = await Promise.all(
     documents.map(async (doc) => {
-      try {
-        const fileBuffer = await fs.readFile(doc.file_path);
-        const mimeType = doc.file_type || "application/octet-stream";
-        const filename = doc.name || path.basename(doc.file_path);
-        return [
-          `--${boundary}`,
-          `Content-Type: ${mimeType}; name="${filename}"`,
-          "Content-Transfer-Encoding: base64",
-          `Content-Disposition: attachment; filename="${filename}"`,
-          "",
-          fileBuffer.toString("base64").replace(/(.{76})/g, "$1\r\n"),
-        ].join("\r\n");
-      } catch (err) {
-        console.error(`[gmailService] Skipping missing/unreadable attachment "${doc.name}" (${doc.file_path}): ${err.message}`);
-        return null;
-      }
+      const fileBuffer = await fs.readFile(doc.file_path);
+      const mimeType = doc.file_type || "application/octet-stream";
+      const filename = doc.name || path.basename(doc.file_path);
+      return [
+        `--${boundary}`,
+        `Content-Type: ${mimeType}; name="${filename}"`,
+        "Content-Transfer-Encoding: base64",
+        `Content-Disposition: attachment; filename="${filename}"`,
+        "",
+        fileBuffer.toString("base64").replace(/(.{76})/g, "$1\r\n"),
+      ].join("\r\n");
     })
   );
-  const attachmentParts = attachmentResults.filter(Boolean);
 
   const raw = [headers.join("\r\n"), "", textPart, ...attachmentParts, `--${boundary}--`, ""].join("\r\n");
   return base64UrlEncode(Buffer.from(raw, "utf8"));

@@ -35,13 +35,16 @@ export function setDefaultDocument(id: string) {
 
 // Uploads/replaces the profile picture. Same manual multipart-body
 // construction as uploadDocument below, since the file comes from
-// expo-image-picker as a { uri, name, mimeType } object.
+// expo-document-picker as a { uri, name, mimeType } object - and the same
+// extension-based mime fallback (resolveMimeType, defined below) so a
+// generic/missing mimeType from the OS picker doesn't cause the upload to
+// silently fail.
 export async function uploadAvatar(file: { uri: string; name: string; mimeType?: string }) {
   const formData = new FormData();
   formData.append("avatar", {
     uri: file.uri,
     name: file.name,
-    type: file.mimeType || "image/jpeg",
+    type: resolveMimeType(file.name, file.mimeType),
   } as any);
 
   const token = getAuthToken();
@@ -69,6 +72,7 @@ const EXTENSION_TO_MIME: Record<string, string> = {
   png: "image/png",
   jpg: "image/jpeg",
   jpeg: "image/jpeg",
+  webp: "image/webp",
 };
 
 function resolveMimeType(name: string, mimeType?: string) {

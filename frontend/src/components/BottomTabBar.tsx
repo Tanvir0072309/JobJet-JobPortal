@@ -12,14 +12,11 @@ type TabItem = {
   icon: keyof typeof Feather.glyphMap;
 };
 
-// Five tabs, one job each — Applications has been replaced with a direct
+// Four tabs, one job each — Applications has been replaced with a direct
 // "Send Email" composer (To/From/Write message) for manually sending mail.
-// "Career" is the real job-openings finder (live job board, not AI guesses),
-// separate from "Find Jobs" which discovers companies via AI.
 const TABS: TabItem[] = [
   { key: "mail", label: "Mail", href: "/(main)/emails", icon: "mail" },
   { key: "find", label: "Find Jobs", href: "/(main)/find-companies", icon: "search" },
-  { key: "career", label: "Career", href: "/(main)/career", icon: "briefcase" },
   { key: "send", label: "Send Email", href: "/(main)/send-email", icon: "send" },
   { key: "settings", label: "Settings", href: "/(main)/settings", icon: "settings" },
 ];

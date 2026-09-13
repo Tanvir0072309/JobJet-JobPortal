@@ -16,11 +16,25 @@ import { colors, spacing, typography, radius } from "../../constants/jobjetTheme
 const CACHE_KEY = "companies:list";
 
 const FILTERS = ["Any", "Remote", "Hybrid", "On-site"] as const;
+// Every value here must be one of the industries the backend actually
+// understands (see companiesController.js's industryFocus whitelist) - the
+// backend already supported all of these, only the picker was missing them.
 const INDUSTRY_OPTIONS: { value: IndustryFocus; label: string }[] = [
   { value: "it", label: "IT / Software" },
   { value: "management", label: "Management / Business" },
+  { value: "finance", label: "Finance" },
+  { value: "healthcare", label: "Healthcare" },
+  { value: "retail", label: "Retail" },
+  { value: "marketing", label: "Marketing" },
+  { value: "education", label: "Education" },
+  { value: "manufacturing", label: "Manufacturing" },
+  { value: "hospitality", label: "Hospitality" },
   { value: "any", label: "Any" },
 ];
+
+// Every search always returns at most this many companies - matches the
+// hard cap already enforced server-side in companiesController.js.
+const COMPANY_SEARCH_LIMIT = 5;
 
 // Small / Mid / Large headcount tag, colour-coded so it's scannable at a
 // glance: Small = orange, Mid = yellow, Large = green. "startup" is grouped
@@ -52,7 +66,6 @@ export default function FindCompaniesScreen() {
   const params = useLocalSearchParams<{ location?: string; limit?: string }>();
 
   const [location, setLocation] = useState(params.location || "");
-  const [limit, setLimit] = useState(params.limit ? Number(params.limit) : 20);
   const [filter, setFilter] = useState<(typeof FILTERS)[number]>("Any");
   const [industry, setIndustry] = useState<IndustryFocus>("any");
 
@@ -136,7 +149,7 @@ export default function FindCompaniesScreen() {
       // Asks Groq (your own API key from Settings) directly for real
       // companies near this location, their careers page, and a few
       // example open roles - no geocoding or map lookup needed.
-      const res = await discoverCompanies(location.trim(), limit, industry);
+      const res = await discoverCompanies(location.trim(), COMPANY_SEARCH_LIMIT, industry);
       setNotice(res.message);
       // Show only the companies from THIS search - not the user's whole
       // saved history. Search 4 times, see 4 results, not an ever-growing
@@ -196,13 +209,7 @@ export default function FindCompaniesScreen() {
         <Text style={styles.label}>Search location</Text>
         <Input value={location} onChangeText={setLocation} placeholder="Berlin, Germany" />
 
-        <Text style={styles.label}>Company limit</Text>
-        <Input
-          value={String(limit)}
-          onChangeText={(text) => setLimit(Number(text.replace(/[^0-9]/g, "")) || 0)}
-          keyboardType="number-pad"
-          placeholder="20"
-        />
+        <Text style={styles.helperNote}>We search {COMPANY_SEARCH_LIMIT} companies at a time, mostly startups.</Text>
 
         <Text style={styles.label}>Filters</Text>
         <View style={styles.filterRow}>
@@ -343,6 +350,7 @@ const styles = StyleSheet.create({
   container: { padding: spacing.lg, gap: spacing.md, maxWidth: 960, width: "100%", alignSelf: "center" },
   searchCard: { gap: spacing.xs },
   label: { ...typography.small, color: colors.textSecondary, marginBottom: spacing.xs, marginTop: spacing.sm },
+  helperNote: { ...typography.tiny, color: colors.textMuted, marginTop: spacing.xs },
   filterRow: { flexDirection: "row", flexWrap: "wrap", gap: spacing.xs, marginBottom: spacing.sm },
   filterPill: {
     paddingHorizontal: spacing.md,

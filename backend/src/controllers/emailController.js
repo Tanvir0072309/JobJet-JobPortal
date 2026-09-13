@@ -4,7 +4,7 @@ const asyncHandler = require("../utils/asyncHandler");
 // Unread replies, surfaced at the top of the Applications page.
 const listUnreadReplies = asyncHandler(async (req, res) => {
   const result = await db.query(
-    `SELECT em.*, a.id AS application_id, c.name AS company_name, j.title AS job_title
+    `SELECT em.*, a.id AS application_id, COALESCE(a.company_name_snapshot, c.name) AS company_name, j.title AS job_title
      FROM email_messages em
      JOIN applications a ON a.id = em.application_id
      LEFT JOIN companies c ON c.id = a.company_id

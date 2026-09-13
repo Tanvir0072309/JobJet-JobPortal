@@ -5,6 +5,7 @@ import { Feather } from "@expo/vector-icons";
 import { EmptyState } from "../../../components/EmptyState";
 import { LoadingState, ErrorState } from "../../../components/LoadingState";
 import { CompanyLogo } from "../../../components/CompanyLogo";
+import { StatusBadge } from "../../../components/StatusBadge";
 import { listInbox, checkReplies, type InboxItem } from "../../../services/emailsService";
 import { ApiError } from "../../../services/api";
 import { getCached, setCached } from "../../../utils/screenCache";
@@ -128,9 +129,12 @@ export default function EmailsInboxScreen() {
             <Text style={[styles.subject, item.unread && styles.textUnread]} numberOfLines={1}>
               {item.subject}
             </Text>
-            <Text style={styles.snippet} numberOfLines={1}>
-              {item.snippet}
-            </Text>
+            <View style={styles.snippetRow}>
+              <StatusBadge status={item.status} />
+              <Text style={styles.snippet} numberOfLines={1}>
+                {item.snippet}
+              </Text>
+            </View>
           </View>
           {item.unread && <View style={styles.dot} />}
           <Feather name="chevron-right" size={16} color={colors.textMuted} style={{ marginLeft: spacing.xs }} />
@@ -181,12 +185,13 @@ const styles = StyleSheet.create({
   avatarUnread: { backgroundColor: colors.black, borderColor: colors.black },
   avatarText: { ...typography.bodyBold, color: colors.textSecondary },
   avatarTextUnread: { color: colors.white },
-  rowMain: { flex: 1, minWidth: 0 },
+  rowMain: { flex: 1, minWidth: 0, marginLeft: spacing.md },
   rowTopLine: { flexDirection: "row", justifyContent: "space-between", marginBottom: 2 },
   sender: { ...typography.bodyBold, color: colors.textPrimary, flexShrink: 1, marginRight: spacing.sm },
   date: { ...typography.tiny, color: colors.textMuted },
   subject: { ...typography.body, color: colors.textPrimary, marginBottom: 2 },
-  snippet: { ...typography.small, color: colors.textMuted },
+  snippetRow: { flexDirection: "row", alignItems: "center", gap: spacing.xs },
+  snippet: { ...typography.small, color: colors.textMuted, flexShrink: 1 },
   textUnread: { color: colors.black, fontWeight: "700" },
   dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.black, marginLeft: spacing.sm },
 });

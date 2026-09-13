@@ -30,6 +30,13 @@ export function getSummary() {
   return apiRequest<{ success: boolean; summary: ApplicationSummary }>("/api/applications/summary");
 }
 
+// Today's send count vs the daily cap (see backend env.dailyEmailLimitPerUser,
+// currently 25/day) - shown on the Profile screen.
+export type SendingLimitStatus = { success: boolean; sentToday: number; limit: number; remaining: number };
+export function getSendingLimitStatus() {
+  return apiRequest<SendingLimitStatus>("/api/applications/sending-limit");
+}
+
 export function listApplications() {
   return apiRequest<{ success: boolean; applications: Application[] }>("/api/applications");
 }

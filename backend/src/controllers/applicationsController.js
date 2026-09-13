@@ -79,6 +79,19 @@ async function getSentTodayCount(userId) {
   return result.rows[0].count;
 }
 
+// Small endpoint the Profile screen (and anywhere else) can poll to show
+// "X/25 emails sent today" - reuses the exact same count the daily send
+// limit itself is enforced against, so the two numbers can never disagree.
+const getSendingLimitStatus = asyncHandler(async (req, res) => {
+  const sentToday = await getSentTodayCount(req.user.id);
+  res.json({
+    success: true,
+    sentToday,
+    limit: env.dailyEmailLimitPerUser,
+    remaining: Math.max(env.dailyEmailLimitPerUser - sentToday, 0),
+  });
+});
+
 const VALID_STATUSES = [
   "draft",
   "generated",
@@ -116,7 +129,7 @@ const getSummary = asyncHandler(async (req, res) => {
 // List applications for the Applications page, newest / unread-reply first.
 const listApplications = asyncHandler(async (req, res) => {
   const result = await db.query(
-    `SELECT a.*, c.name AS company_name, c.website AS company_website, c.location AS company_location, j.title AS job_title
+    `SELECT a.*, COALESCE(a.company_name_snapshot, c.name) AS company_name, COALESCE(a.company_website_snapshot, c.website) AS company_website, c.location AS company_location, j.title AS job_title
      FROM applications a
      LEFT JOIN companies c ON c.id = a.company_id
      LEFT JOIN jobs j ON j.id = a.job_id
@@ -130,7 +143,7 @@ const listApplications = asyncHandler(async (req, res) => {
 const getApplication = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const appResult = await db.query(
-    `SELECT a.*, c.name AS company_name, c.website AS company_website, j.title AS job_title
+    `SELECT a.*, COALESCE(a.company_name_snapshot, c.name) AS company_name, COALESCE(a.company_website_snapshot, c.website) AS company_website, j.title AS job_title
      FROM applications a
      LEFT JOIN companies c ON c.id = a.company_id
      LEFT JOIN jobs j ON j.id = a.job_id
@@ -160,7 +173,7 @@ const createApplication = asyncHandler(async (req, res) => {
     return res.status(400).json({ success: false, message: "companyId is required." });
   }
 
-  const company = await db.query("SELECT id FROM companies WHERE id = $1 AND user_id = $2", [
+  const company = await db.query("SELECT id, name, website FROM companies WHERE id = $1 AND user_id = $2", [
     companyId,
     req.user.id,
   ]);
@@ -169,10 +182,10 @@ const createApplication = asyncHandler(async (req, res) => {
   }
 
   const result = await db.query(
-    `INSERT INTO applications (user_id, company_id, job_id, recipient_email, status)
-     VALUES ($1, $2, $3, $4, 'draft')
+    `INSERT INTO applications (user_id, company_id, job_id, recipient_email, status, company_name_snapshot, company_website_snapshot)
+     VALUES ($1, $2, $3, $4, 'draft', $5, $6)
      RETURNING *`,
-    [req.user.id, companyId, jobId || null, recipientEmail || null]
+    [req.user.id, companyId, jobId || null, recipientEmail || null, company.rows[0].name, company.rows[0].website]
   );
 
   res.status(201).json({ success: true, application: result.rows[0] });
@@ -243,12 +256,12 @@ const generateWithAI = asyncHandler(async (req, res) => {
       );
 
       const appResult = await db.query(
-        `INSERT INTO applications (user_id, company_id, job_id, subject, body, status)
-         VALUES ($1, $2, $3, $4, $5, 'generated')
+        `INSERT INTO applications (user_id, company_id, job_id, subject, body, status, company_name_snapshot, company_website_snapshot)
+         VALUES ($1, $2, $3, $4, $5, 'generated', $6, $7)
          ON CONFLICT (user_id, company_id, COALESCE(job_id, '00000000-0000-0000-0000-000000000000'::uuid), COALESCE(recipient_email, ''))
-         DO UPDATE SET subject = $4, body = $5, status = 'generated', updated_at = now()
+         DO UPDATE SET subject = $4, body = $5, status = 'generated', company_name_snapshot = $6, company_website_snapshot = $7, updated_at = now()
          RETURNING *`,
-        [req.user.id, company.id, job?.id || null, generated.subject, generated.body]
+        [req.user.id, company.id, job?.id || null, generated.subject, generated.body, company.name, company.website]
       );
 
       results.push({ companyId, company: company.name, status: "generated", application: appResult.rows[0] });
@@ -367,10 +380,10 @@ const applyToCompanies = asyncHandler(async (req, res) => {
       const attachments = await pickAttachmentsForPost(req.user.id, job?.title);
 
       const appResult = await db.query(
-        `INSERT INTO applications (user_id, company_id, job_id, recipient_email, subject, body, status, selected_document_ids)
-         VALUES ($1, $2, $3, $4, $5, $6, 'ready_to_send', $7)
+        `INSERT INTO applications (user_id, company_id, job_id, recipient_email, subject, body, status, selected_document_ids, company_name_snapshot, company_website_snapshot)
+         VALUES ($1, $2, $3, $4, $5, $6, 'ready_to_send', $7, $8, $9)
          ON CONFLICT (user_id, company_id, COALESCE(job_id, '00000000-0000-0000-0000-000000000000'::uuid), COALESCE(recipient_email, ''))
-         DO UPDATE SET subject = $5, body = $6, status = 'ready_to_send', updated_at = now()
+         DO UPDATE SET subject = $5, body = $6, status = 'ready_to_send', company_name_snapshot = $8, company_website_snapshot = $9, updated_at = now()
          RETURNING *`,
         [
           req.user.id,
@@ -380,6 +393,8 @@ const applyToCompanies = asyncHandler(async (req, res) => {
           generated.subject,
           finalBody,
           JSON.stringify(attachments.map((d) => d.id)),
+          company.name,
+          company.website,
         ]
       );
       const application = appResult.rows[0];
@@ -417,7 +432,7 @@ const sendApplication = asyncHandler(async (req, res) => {
   const { id } = req.params;
 
   const appRes = await db.query(
-    `SELECT a.*, c.name AS company_name FROM applications a
+    `SELECT a.*, COALESCE(a.company_name_snapshot, c.name) AS company_name FROM applications a
      LEFT JOIN companies c ON c.id = a.company_id
      WHERE a.id = $1 AND a.user_id = $2`,
     [id, req.user.id]
@@ -557,6 +572,7 @@ const sendManualEmail = asyncHandler(async (req, res) => {
 
 module.exports = {
   getSummary,
+  getSendingLimitStatus,
   listApplications,
   getApplication,
   createApplication,

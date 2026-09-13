@@ -8,7 +8,6 @@ const {
   updateApplicationSettings,
   eraseEmails,
   eraseAllData,
-  deleteAccount,
 } = require("../controllers/settingsController");
 const { requireAuth } = require("../middleware/authMiddleware");
 
@@ -26,6 +25,5 @@ router.put("/push-token", savePushToken);
 
 router.delete("/erase-emails", eraseEmails);
 router.delete("/erase-all-data", eraseAllData);
-router.delete("/delete-account", deleteAccount);
 
 module.exports = router;

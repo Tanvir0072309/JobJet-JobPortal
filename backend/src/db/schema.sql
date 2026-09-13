@@ -220,6 +220,23 @@ CREATE INDEX IF NOT EXISTS idx_applications_user ON applications (user_id);
 CREATE INDEX IF NOT EXISTS idx_applications_status ON applications (status);
 CREATE INDEX IF NOT EXISTS idx_applications_thread ON applications (thread_id);
 
+-- Snapshot of the company's name/website at the moment this application was
+-- created, so the Emails/Applications lists always know who an email went
+-- to - even if the underlying `companies` row is later cleaned up by a
+-- fresh search (see companiesController.discoverCompanies) or otherwise
+-- removed. Without this, company_name is only ever available via a live
+-- LEFT JOIN to companies, which silently turns into "Unknown company" the
+-- moment that row disappears. Existing rows are backfilled once from
+-- whatever their companies row currently holds; every new application from
+-- here on writes its own snapshot at INSERT time.
+ALTER TABLE applications ADD COLUMN IF NOT EXISTS company_name_snapshot TEXT;
+ALTER TABLE applications ADD COLUMN IF NOT EXISTS company_website_snapshot TEXT;
+UPDATE applications a
+  SET company_name_snapshot = c.name,
+      company_website_snapshot = c.website
+  FROM companies c
+  WHERE c.id = a.company_id AND a.company_name_snapshot IS NULL;
+
 CREATE TABLE IF NOT EXISTS email_messages (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   application_id UUID NOT NULL REFERENCES applications (id) ON DELETE CASCADE,
