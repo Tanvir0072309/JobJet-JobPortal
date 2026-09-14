@@ -6,6 +6,37 @@ const emailFinderService = require("../services/emailFinderService");
 const groqService = require("../services/groqService");
 const gmailService = require("../services/gmailService");
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// Picks the one job (out of a company's fetched jobs) to actually apply to,
+// restricted to the candidate's own "Interested Posts" (profile.interested_posts
+// - the job titles they said they're targeting, set on the Profile screen).
+// If the candidate has set interested posts, a company only gets applied to
+// when at least one of its open roles' titles actually matches one of them
+// - a job title that doesn't match is never emailed, no matter how good a
+// fit the company otherwise looks. Matching is case-insensitive and allows
+// either title to contain the other (e.g. "Backend Developer" matches
+// "Senior Backend Developer") so small real-world title variations still
+// count as a match. If the candidate hasn't set any interested posts yet,
+// there's nothing to filter against, so the previous behavior (first listed
+// job) is kept unchanged.
+function pickMatchingJob(jobs, interestedPosts) {
+  const list = Array.isArray(jobs) ? jobs : [];
+  if (!list.length) return null;
+
+  const posts = Array.isArray(interestedPosts) ? interestedPosts.filter(Boolean) : [];
+  if (posts.length === 0) return list[0];
+
+  const normalizedPosts = posts.map((p) => p.toLowerCase().trim());
+  const match = list.find((job) => {
+    const title = (job?.title || "").toLowerCase().trim();
+    if (!title) return false;
+    return normalizedPosts.some((post) => title === post || title.includes(post) || post.includes(title));
+  });
+
+  return match || null; // null = no matching job title -> caller skips this company entirely.
+}
+
 // Only resume + project_list are ever attached to an application email.
 // A candidate can keep a different resume/project-list per post (tagged via
 // documents.post_tag, e.g. "Backend Developer") - when applying for a job
@@ -247,7 +278,16 @@ const generateWithAI = asyncHandler(async (req, res) => {
         results.push({ companyId, status: "error", message: "Company not found." });
         continue;
       }
-      const job = company.jobs?.[0] || null;
+      const job = pickMatchingJob(company.jobs, profile.interested_posts);
+      if (!job) {
+        results.push({
+          companyId,
+          company: company.name,
+          status: "skipped",
+          message: "None of this company's open roles match your Interested Posts job titles.",
+        });
+        continue;
+      }
 
       // One Groq call per company - never repeated within this loop.
       const generated = await groqService.generateApplicationEmail(
@@ -336,6 +376,21 @@ const applyToCompanies = asyncHandler(async (req, res) => {
         continue;
       }
 
+      // Only apply when one of this company's open roles actually matches
+      // one of the candidate's own Interested Posts job titles (set on the
+      // Profile screen) - checked up front, before spending a hiring-email
+      // lookup or a Groq call on a company we're going to skip anyway.
+      const job = pickMatchingJob(company.jobs, profile.interested_posts);
+      if (!job) {
+        results.push({
+          companyId,
+          company: company.name,
+          status: "skipped",
+          message: "None of this company's open roles match your Interested Posts job titles.",
+        });
+        continue;
+      }
+
       // The hiring-email finder is only called when we don't already have a
       // saved contact (normally there already is one - discoverCompanies
       // looks this up at search time now). Only ever a confirmed hiring
@@ -363,8 +418,6 @@ const applyToCompanies = asyncHandler(async (req, res) => {
         });
         continue;
       }
-
-      const job = company.jobs?.[0] || null;
 
       // One Groq call per company.
       const generated = await groqService.generateApplicationEmail(
@@ -467,7 +520,7 @@ const sendApplication = asyncHandler(async (req, res) => {
     });
   }
 
-  const documentIds = application.selected_document_ids || [];
+  const documentIds = (application.selected_document_ids || []).filter((id) => UUID_RE.test(id));
   const docsRes = documentIds.length
     ? await db.query("SELECT * FROM documents WHERE id = ANY($1::uuid[]) AND user_id = $2", [
         documentIds,
@@ -532,7 +585,7 @@ const sendManualEmail = asyncHandler(async (req, res) => {
     });
   }
 
-  const ids = Array.isArray(documentIds) ? documentIds.filter(Boolean) : [];
+  const ids = Array.isArray(documentIds) ? documentIds.filter((id) => typeof id === "string" && UUID_RE.test(id)) : [];
   const docsRes = ids.length
     ? await db.query("SELECT * FROM documents WHERE id = ANY($1::uuid[]) AND user_id = $2", [ids, req.user.id])
     : { rows: [] };

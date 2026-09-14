@@ -4,7 +4,18 @@ import { apiRequest } from "./api";
 // /api/auth/login (those endpoints don't touch Gmail at all) - they're
 // filled in right after, from GET /api/gmail/status, in AuthContext. See
 // AuthContext.refreshGmailStatus.
-export type User = { id: string; email: string; gmailConnected?: boolean; gmailEmail?: string | null };
+// avatarUrl (the candidate's uploaded profile picture, relative path like
+// gmailEmail/gmailConnected) isn't returned here either - it lives on the
+// profiles table and is pulled in + kept in sync by AuthContext.refreshAvatar,
+// so the top bar can show it as soon as it's known instead of only after a
+// full profile-screen visit.
+export type User = {
+  id: string;
+  email: string;
+  gmailConnected?: boolean;
+  gmailEmail?: string | null;
+  avatarUrl?: string | null;
+};
 export type AuthResponse = { success: boolean; token: string; user: User };
 
 export function register(email: string, password: string) {

@@ -64,10 +64,16 @@ const discoverCompanies = asyncHandler(async (req, res) => {
       groqKey
     );
   } catch (err) {
+    // groqService already retries transient "couldn't produce valid JSON"
+    // hiccups internally - if we still land here, give the user something
+    // actionable instead of Groq's raw internal error text.
+    const friendly = /json|validate/i.test(err.message)
+      ? "The AI had trouble putting together results for this search. Please try again."
+      : err.message;
     return res.status(502).json({
       success: false,
       code: "DISCOVERY_FAILED",
-      message: `Company search failed: ${err.message}`,
+      message: `Company search failed: ${friendly}`,
     });
   }
 

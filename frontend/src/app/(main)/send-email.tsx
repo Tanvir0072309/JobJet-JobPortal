@@ -28,6 +28,15 @@ export default function SendEmailScreen() {
     try {
       const res = await listDocuments();
       setDocuments(res.documents);
+      // Drop any selected doc that no longer exists (e.g. it was deleted
+      // from the Profile screen while this screen stayed open) - otherwise
+      // a stale, already-deleted document id keeps getting sent with every
+      // future email and can block sending entirely.
+      setSelectedDocs((prev) => {
+        const validIds = new Set(res.documents.map((d) => d.id));
+        const next = new Set(Array.from(prev).filter((id) => validIds.has(id)));
+        return next.size === prev.size ? prev : next;
+      });
     } catch {
       // Non-fatal - attaching documents is optional here.
     }

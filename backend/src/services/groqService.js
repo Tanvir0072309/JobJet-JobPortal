@@ -3,6 +3,51 @@
 const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
 const GROQ_MODEL = "openai/gpt-oss-120b";
 
+// When Groq's own structured-output validator can't coerce the model's
+// output into the requested JSON schema, it replies with an error whose
+// `code` is "json_validate_failed" and a message like "Failed to generate
+// JSON. Please adjust your prompt. See `failed_generation` for more
+// details." Surfacing that raw message to the user (as
+// "Company search failed: Failed to validate json ...") is confusing and
+// looks like a bug - it's actually just an occasional model hiccup that a
+// plain retry almost always fixes. `postJson` centralizes that retry (and
+// leaves every other error, e.g. a bad/missing API key, alone).
+async function postJson(body, apiKey, { retries = 2 } = {}) {
+  let lastErr;
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    const response = await fetch(GROQ_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify(body),
+    });
+
+    const data = await response.json().catch(() => ({}));
+
+    if (response.ok) {
+      const raw = data?.choices?.[0]?.message?.content || "{}";
+      try {
+        return JSON.parse(raw);
+      } catch (parseErr) {
+        lastErr = new Error("Groq returned an unreadable response - please try again.");
+        continue; // retry - a malformed JSON body is exactly the transient case retrying fixes.
+      }
+    }
+
+    const code = data?.error?.code;
+    const isJsonValidationHiccup = code === "json_validate_failed";
+    if (isJsonValidationHiccup && attempt < retries) {
+      lastErr = new Error(data?.error?.message || "Groq API request failed.");
+      continue;
+    }
+
+    throw new Error(data?.error?.message || "Groq API request failed.");
+  }
+  throw lastErr || new Error("Groq API request failed.");
+}
+
 function buildPrompt({ profile, company, job, tone }) {
   const skills = [profile?.skills, profile?.programming_languages, profile?.frameworks]
     .flat()
@@ -30,13 +75,8 @@ function buildPrompt({ profile, company, job, tone }) {
 // One Groq call per company per apply action - never repeated for the same
 // company within a single batch-apply request.
 async function generateApplicationEmail({ profile, company, job, tone }, apiKey) {
-  const response = await fetch(GROQ_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
+  const parsed = await postJson(
+    {
       model: GROQ_MODEL,
       messages: [
         {
@@ -48,26 +88,17 @@ async function generateApplicationEmail({ profile, company, job, tone }, apiKey)
       ],
       temperature: 0.6,
       response_format: { type: "json_object" },
-    }),
-  });
+    },
+    apiKey
+  );
 
-  const data = await response.json().catch(() => ({}));
-
-  if (!response.ok) {
-    throw new Error(data?.error?.message || "Groq API request failed.");
-  }
-
-  const raw = data?.choices?.[0]?.message?.content || "{}";
-  try {
-    const parsed = JSON.parse(raw);
-    if (!parsed.subject || !parsed.body) throw new Error("incomplete");
-    return parsed;
-  } catch {
+  if (!parsed?.subject || !parsed?.body) {
     return {
       subject: `Application for ${job?.title || "a role"} at ${company?.name || "your company"}`,
-      body: raw,
+      body: parsed?.body || "",
     };
   }
+  return parsed;
 }
 
 // ---------------------------------------------------------------------------
@@ -133,13 +164,8 @@ const SIZE_RANK = { startup: 0, small: 1, mid: 2, large: 3, unknown: 4 };
 async function discoverCompanies({ location, industry = "any", limit = 20, workMode = "any" }, apiKey) {
   if (!apiKey) throw new Error("Groq API key not configured.");
 
-  const response = await fetch(GROQ_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
+  const parsed = await postJson(
+    {
       model: GROQ_MODEL,
       messages: [
         {
@@ -151,22 +177,9 @@ async function discoverCompanies({ location, industry = "any", limit = 20, workM
       ],
       temperature: 0.4,
       response_format: { type: "json_object" },
-    }),
-  });
-
-  const data = await response.json().catch(() => ({}));
-
-  if (!response.ok) {
-    throw new Error(data?.error?.message || "Groq API request failed.");
-  }
-
-  const raw = data?.choices?.[0]?.message?.content || "{}";
-  let parsed;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    throw new Error("Groq returned an unreadable response - please try again.");
-  }
+    },
+    apiKey
+  );
 
   const list = Array.isArray(parsed?.companies) ? parsed.companies : [];
 
@@ -248,39 +261,30 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 async function findHiringEmailGuess({ company }, apiKey) {
   if (!apiKey) return null;
 
-  const response = await fetch(GROQ_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: GROQ_MODEL,
-      messages: [
-        {
-          role: "system",
-          content:
-            "You confirm real, publicly-known company hiring-email addresses. You never invent an address you aren't reasonably confident about, and you always respond with valid JSON only.",
-        },
-        { role: "user", content: buildHiringEmailPrompt({ company }) },
-      ],
-      temperature: 0.2,
-      response_format: { type: "json_object" },
-    }),
-  });
-
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) return null;
-
-  const raw = data?.choices?.[0]?.message?.content || "{}";
   try {
-    const parsed = JSON.parse(raw);
+    const parsed = await postJson(
+      {
+        model: GROQ_MODEL,
+        messages: [
+          {
+            role: "system",
+            content:
+              "You confirm real, publicly-known company hiring-email addresses. You never invent an address you aren't reasonably confident about, and you always respond with valid JSON only.",
+          },
+          { role: "user", content: buildHiringEmailPrompt({ company }) },
+        ],
+        temperature: 0.2,
+        response_format: { type: "json_object" },
+      },
+      apiKey
+    );
+
     if (!parsed?.confident || typeof parsed?.email !== "string") return null;
     const email = parsed.email.trim().toLowerCase();
     if (!EMAIL_RE.test(email)) return null;
     return { email, confidence: 45 };
   } catch {
-    return null;
+    return null; // best-effort fallback - a failure here just means no guess.
   }
 }
 

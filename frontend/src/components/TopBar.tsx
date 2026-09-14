@@ -1,9 +1,10 @@
 import React from "react";
-import { View, Text, Pressable, StyleSheet } from "react-native";
+import { View, Text, Pressable, StyleSheet, Image } from "react-native";
 import { useRouter, usePathname } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../context/AuthContext";
+import { resolveAvatarUrl } from "../services/profileService";
 import { colors, spacing, typography, radius } from "../constants/jobjetTheme";
 
 const PAGE_TITLES: Record<string, string> = {
@@ -28,7 +29,9 @@ export function TopBar() {
   const insets = useSafeAreaInsets();
   const title = getTitle(pathname);
   const isProfilePage = pathname.replace("/(main)", "").startsWith("/profile");
-  const initial = (user?.email || "?").trim().charAt(0).toUpperCase();
+  // Show the candidate's own uploaded photo when there is one - the plain
+  // "user" icon is only the fallback for when no image has been uploaded.
+  const avatarSource = resolveAvatarUrl(user?.avatarUrl);
 
   return (
     <View style={[styles.bar, { paddingTop: insets.top + spacing.md }]}>
@@ -38,7 +41,11 @@ export function TopBar() {
         style={[styles.avatar, isProfilePage && styles.avatarActive]}
         hitSlop={8}
       >
-        <Feather name="user" size={18} color={isProfilePage ? colors.white : colors.primary} />
+        {avatarSource ? (
+          <Image source={{ uri: avatarSource }} style={styles.avatarImage} />
+        ) : (
+          <Feather name="user" size={18} color={isProfilePage ? colors.white : colors.primary} />
+        )}
       </Pressable>
     </View>
   );
@@ -64,6 +71,8 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     alignItems: "center",
     justifyContent: "center",
+    overflow: "hidden",
   },
   avatarActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  avatarImage: { width: "100%", height: "100%" },
 });

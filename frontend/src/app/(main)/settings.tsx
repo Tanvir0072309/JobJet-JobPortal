@@ -247,6 +247,12 @@ export default function SettingsScreen() {
           onRemove={() => handleRemoveKey("groq")}
           saving={savingProvider === "groq"}
         />
+        <Text style={styles.helperNote}>
+          Required - JobJet uses Groq's AI to find companies and write your application emails. Get a free key: (1)
+          go to console.groq.com and sign up or log in, (2) open "API Keys" in the left menu, (3) tap "Create API
+          Key", give it any name, (4) copy the key it shows you (starts with "gsk_") and paste it above, then tap
+          Save. Groq's free tier is generous and needs no card.
+        </Text>
         <View style={styles.divider} />
         <CredentialRow
           label="Hunter API Key (optional)"
@@ -272,7 +278,7 @@ export default function SettingsScreen() {
         {user?.gmailConnected ? (
           <View style={styles.statusRow}>
             <View style={styles.statusDotGreen} />
-            <Text style={styles.rowValue}>Connected ({user.gmailEmail})</Text>
+            <Text style={styles.rowValue}>Connected{user.gmailEmail ? ` (${user.gmailEmail})` : ""}</Text>
           </View>
         ) : (
           <View style={styles.statusRow}>
@@ -412,9 +418,15 @@ function CredentialRow({
     <View>
       <Text style={styles.rowLabel}>{label}</Text>
       {status?.configured ? (
-        <Text style={styles.rowValue}>Configured ({status.maskedKey})</Text>
+        <View style={styles.statusRow}>
+          <View style={styles.statusDotGreen} />
+          <Text style={styles.rowValue}>Connected ({status.maskedKey})</Text>
+        </View>
       ) : (
-        <Text style={styles.rowValueMuted}>Not configured</Text>
+        <View style={styles.statusRow}>
+          <View style={styles.statusDotGray} />
+          <Text style={styles.rowValueMuted}>Not connected</Text>
+        </View>
       )}
       <Input
         value={value}

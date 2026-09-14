@@ -292,21 +292,34 @@ async function buildMimeMessage({ fromEmail, fromName, to, subject, body, docume
     Buffer.from(body || "", "utf8").toString("base64"),
   ].join("\r\n");
 
-  const attachmentParts = await Promise.all(
-    documents.map(async (doc) => {
-      const fileBuffer = await fs.readFile(doc.file_path);
-      const mimeType = doc.file_type || "application/octet-stream";
-      const filename = doc.name || path.basename(doc.file_path);
-      return [
-        `--${boundary}`,
-        `Content-Type: ${mimeType}; name="${filename}"`,
-        "Content-Transfer-Encoding: base64",
-        `Content-Disposition: attachment; filename="${filename}"`,
-        "",
-        fileBuffer.toString("base64").replace(/(.{76})/g, "$1\r\n"),
-      ].join("\r\n");
-    })
-  );
+  const attachmentParts = (
+    await Promise.all(
+      documents.map(async (doc) => {
+        let fileBuffer;
+        try {
+          fileBuffer = await fs.readFile(doc.file_path);
+        } catch {
+          // The document row still exists but its file is gone from disk
+          // (e.g. it was deleted after this application was drafted, or a
+          // stale ID slipped through from the client). Skip just this one
+          // attachment instead of throwing and failing the ENTIRE email -
+          // previously a single missing file here blocked every send that
+          // referenced it, including unrelated future ones.
+          return null;
+        }
+        const mimeType = doc.file_type || "application/octet-stream";
+        const filename = doc.name || path.basename(doc.file_path);
+        return [
+          `--${boundary}`,
+          `Content-Type: ${mimeType}; name="${filename}"`,
+          "Content-Transfer-Encoding: base64",
+          `Content-Disposition: attachment; filename="${filename}"`,
+          "",
+          fileBuffer.toString("base64").replace(/(.{76})/g, "$1\r\n"),
+        ].join("\r\n");
+      })
+    )
+  ).filter(Boolean);
 
   const raw = [headers.join("\r\n"), "", textPart, ...attachmentParts, `--${boundary}--`, ""].join("\r\n");
   return base64UrlEncode(Buffer.from(raw, "utf8"));

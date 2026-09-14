@@ -6,6 +6,7 @@ import { getGmailStatus } from "../services/gmailService";
 import { registerForPushNotificationsAsync } from "../services/notificationsService";
 import { savePushToken } from "../services/settingsService";
 import { clearScreenCache } from "../utils/screenCache";
+import * as profileService from "../services/profileService";
 import type { User } from "../services/authService";
 
 type AuthContextValue = {
@@ -21,6 +22,14 @@ type AuthContextValue = {
   // up-to-date `connected` value so callers don't need a second read of
   // `user` immediately after (which may not have re-rendered yet).
   refreshGmailStatus: () => Promise<boolean>;
+  // Re-pulls the candidate's profile picture from the backend and updates
+  // the cached user - called on login/session-restore so the top bar's
+  // avatar is right from the start, and after uploading/changing a photo.
+  refreshAvatar: () => Promise<void>;
+  // Lets a screen that already has the fresh avatar_url (e.g. right after
+  // a successful upload) push it straight into the shared user object
+  // without waiting for a network round trip.
+  setAvatarUrl: (avatarUrl: string | null) => void;
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -128,13 +137,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const refreshAvatar = async (): Promise<void> => {
+    try {
+      const res = await profileService.getProfile();
+      const avatarUrl = res.profile?.avatar_url ?? null;
+      setUser((prev) => {
+        if (!prev) return prev;
+        const updated: User = { ...prev, avatarUrl };
+        SecureStore.setItemAsync(USER_KEY, JSON.stringify(updated)).catch(() => {});
+        return updated;
+      });
+    } catch {
+      // Not fatal - the top bar just falls back to the plain icon until the
+      // next successful refresh (e.g. next app launch or profile visit).
+    }
+  };
+
+  const setAvatarUrl = (avatarUrl: string | null) => {
+    setUser((prev) => {
+      if (!prev) return prev;
+      const updated: User = { ...prev, avatarUrl };
+      SecureStore.setItemAsync(USER_KEY, JSON.stringify(updated)).catch(() => {});
+      return updated;
+    });
+  };
+
   // Right after a session is restored/created, also pull the latest Gmail
-  // status - the JWT payload/authService response never carries it, and it
-  // can change server-side (e.g. the user disconnected from Settings on
-  // another device) independent of login/register.
+  // status and avatar - the JWT payload/authService response never carries
+  // either, and both can change server-side independent of login/register.
   useEffect(() => {
     if (!user) return;
     refreshGmailStatus();
+    refreshAvatar();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
 
@@ -159,7 +193,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const value = useMemo(
-    () => ({ user, isAuthenticated: !!user, isBootstrapping, login, register, logout, refreshGmailStatus }),
+    () => ({
+      user,
+      isAuthenticated: !!user,
+      isBootstrapping,
+      login,
+      register,
+      logout,
+      refreshGmailStatus,
+      refreshAvatar,
+      setAvatarUrl,
+    }),
     [user, isBootstrapping]
   );
 

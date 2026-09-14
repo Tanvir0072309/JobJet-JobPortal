@@ -22,7 +22,7 @@ type Section = "personal" | "professional" | "documents" | "interested" | null;
 
 export default function ProfileScreen() {
   const router = useRouter();
-  const { user, logout } = useAuth();
+  const { user, logout, setAvatarUrl } = useAuth();
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -173,6 +173,9 @@ export default function ProfileScreen() {
         mimeType: asset.mimeType,
       });
       setProfile((prev: any) => ({ ...prev, avatar_url: res.avatar_url }));
+      // Update the shared user object too, so the top bar icon switches to
+      // the new photo immediately instead of only after the next refetch.
+      setAvatarUrl(res.avatar_url);
     } catch (err) {
       Alert.alert("Couldn't update photo", err instanceof Error ? err.message : "Please try again.");
     } finally {
