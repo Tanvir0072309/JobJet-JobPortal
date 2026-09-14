@@ -20,21 +20,36 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 // count as a match. If the candidate hasn't set any interested posts yet,
 // there's nothing to filter against, so the previous behavior (first listed
 // job) is kept unchanged.
+// Returns { job, matchedPost } where matchedPost is the exact string from
+// the candidate's own interested_posts list that matched (or null if there
+// were no interested posts to match against, or nothing matched). Callers
+// MUST use matchedPost (not job.title) when looking up a per-post tagged
+// resume/project-list, since job.title is the real-world job posting title
+// (e.g. "Senior Backend Developer (Remote), Pune") which almost never
+// equals the shorter interested-post label the candidate tagged their
+// documents with (e.g. "Backend Developer") - comparing against job.title
+// meant the tagged resume/project-list was never found, and the
+// default/most-recent documents were silently sent for every application
+// instead, no matter which post was actually tagged. See
+// pickAttachmentsForPost below.
 function pickMatchingJob(jobs, interestedPosts) {
   const list = Array.isArray(jobs) ? jobs : [];
-  if (!list.length) return null;
+  if (!list.length) return { job: null, matchedPost: null };
 
   const posts = Array.isArray(interestedPosts) ? interestedPosts.filter(Boolean) : [];
-  if (posts.length === 0) return list[0];
+  if (posts.length === 0) return { job: list[0], matchedPost: null };
 
-  const normalizedPosts = posts.map((p) => p.toLowerCase().trim());
-  const match = list.find((job) => {
+  const normalizedPosts = posts.map((p) => ({ raw: p, norm: p.toLowerCase().trim() }));
+  for (const job of list) {
     const title = (job?.title || "").toLowerCase().trim();
-    if (!title) return false;
-    return normalizedPosts.some((post) => title === post || title.includes(post) || post.includes(title));
-  });
+    if (!title) continue;
+    const hit = normalizedPosts.find(
+      (post) => title === post.norm || title.includes(post.norm) || post.norm.includes(title)
+    );
+    if (hit) return { job, matchedPost: hit.raw };
+  }
 
-  return match || null; // null = no matching job title -> caller skips this company entirely.
+  return { job: null, matchedPost: null }; // no matching job title -> caller skips this company entirely.
 }
 
 // Only resume + project_list are ever attached to an application email.
@@ -278,7 +293,7 @@ const generateWithAI = asyncHandler(async (req, res) => {
         results.push({ companyId, status: "error", message: "Company not found." });
         continue;
       }
-      const job = pickMatchingJob(company.jobs, profile.interested_posts);
+      const { job } = pickMatchingJob(company.jobs, profile.interested_posts);
       if (!job) {
         results.push({
           companyId,
@@ -380,7 +395,7 @@ const applyToCompanies = asyncHandler(async (req, res) => {
       // one of the candidate's own Interested Posts job titles (set on the
       // Profile screen) - checked up front, before spending a hiring-email
       // lookup or a Groq call on a company we're going to skip anyway.
-      const job = pickMatchingJob(company.jobs, profile.interested_posts);
+      const { job, matchedPost } = pickMatchingJob(company.jobs, profile.interested_posts);
       if (!job) {
         results.push({
           companyId,
@@ -398,7 +413,7 @@ const applyToCompanies = asyncHandler(async (req, res) => {
       // emailFinderService for the accuracy-first fallback chain.
       let contactEmail = company.contacts?.[0]?.email || null;
       if (!contactEmail) {
-        const hiring = await emailFinderService.findHiringEmail({ userId: req.user.id, company, groqKey });
+        const hiring = await emailFinderService.findHiringEmail({ userId: req.user.id, company });
         if (hiring?.email) {
           contactEmail = hiring.email;
           await db.query(
@@ -427,10 +442,11 @@ const applyToCompanies = asyncHandler(async (req, res) => {
 
       const finalBody = settings.email_signature ? `${generated.body}\n\n${settings.email_signature}` : generated.body;
 
-      // Resume + project list only, matched to this specific job's title
-      // when the candidate has tagged a pair for that post - otherwise the
-      // default resume/project list is used.
-      const attachments = await pickAttachmentsForPost(req.user.id, job?.title);
+      // Resume + project list only, matched to the candidate's own
+      // Interested Post label that this job matched (NOT the raw job
+      // posting title - see pickMatchingJob) when they've tagged a pair for
+      // that post; otherwise the default resume/project list is used.
+      const attachments = await pickAttachmentsForPost(req.user.id, matchedPost);
 
       const appResult = await db.query(
         `INSERT INTO applications (user_id, company_id, job_id, recipient_email, subject, body, status, selected_document_ids, company_name_snapshot, company_website_snapshot)
@@ -623,6 +639,39 @@ const sendManualEmail = asyncHandler(async (req, res) => {
   res.status(201).json({ success: true, application });
 });
 
+// Drafts a message body for the manual "Send Email" screen from just the
+// subject line the candidate already typed, using their profile so the
+// wording actually sounds like them. Used by the frontend's 3-second
+// "stopped typing the subject" debounce so the message box fills in on its
+// own instead of staying blank.
+const draftMessage = asyncHandler(async (req, res) => {
+  const { subject } = req.body;
+  if (!subject || typeof subject !== "string" || !subject.trim()) {
+    return res.status(400).json({ success: false, message: "Subject is required to draft a message." });
+  }
+
+  const groqKey = await getCredential(req.user.id, "groq");
+  if (!groqKey) {
+    return res.status(400).json({
+      success: false,
+      code: "GROQ_NOT_CONNECTED",
+      message: "Connect a Groq API key in Settings to auto-draft messages.",
+    });
+  }
+
+  const profileRes = await db.query("SELECT * FROM profiles WHERE user_id = $1", [req.user.id]);
+  const profile = profileRes.rows[0] || {};
+  const settingsRes = await db.query("SELECT * FROM application_settings WHERE user_id = $1", [req.user.id]);
+  const settings = settingsRes.rows[0] || {};
+
+  const draft = await groqService.draftManualEmailBody(
+    { profile, subject: subject.trim(), tone: settings.application_tone || "professional" },
+    groqKey
+  );
+
+  res.json({ success: true, body: draft.body || "" });
+});
+
 module.exports = {
   getSummary,
   getSendingLimitStatus,
@@ -634,4 +683,5 @@ module.exports = {
   applyToCompanies,
   sendApplication,
   sendManualEmail,
+  draftMessage,
 };

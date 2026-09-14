@@ -10,6 +10,7 @@ const {
   applyToCompanies,
   sendApplication,
   sendManualEmail,
+  draftMessage,
 } = require("../controllers/applicationsController");
 const { requireAuth } = require("../middleware/authMiddleware");
 
@@ -26,6 +27,7 @@ router.patch("/:id/status", updateApplicationStatus);
 router.post("/generate", generateWithAI);
 router.post("/apply", applyToCompanies);
 router.post("/compose-send", sendManualEmail);
+router.post("/draft-message", draftMessage);
 router.post("/:id/send", sendApplication);
 
 module.exports = router;

@@ -7,14 +7,22 @@
 // hr@, recruiting@, talent@...) - never a generic info@/contact@/support@
 // address, even if that's all a company's website exposes. If the
 // configured finder (Hunter, or JobJet's own website scraper) can't turn up
-// a hiring-type address, we fall back to asking Groq to confirm the
-// company's real hiring email from its own knowledge, as a last resort.
-// If nothing hiring-specific can be confirmed either way, no email is
-// returned at all - fewer emails, but every one that is used is accurate.
+// a hiring-type address, no email is returned at all - fewer emails, but
+// every one that is used is accurate.
+//
+// NOTE: this used to also fall back to asking Groq to "confirm" a hiring
+// email from its own training knowledge (findHiringEmailGuess). That was
+// removed - an LLM has no way to actually know whether a mailbox exists
+// today, so it would confidently return addresses that had never existed
+// or no longer did (e.g. "jobs@loopio.com" -> hard "no such user" bounce),
+// which contradicted the accuracy-first rule this module claims to
+// enforce. Only emails actually found in a real source (Hunter's verified
+// database, or literally printed on the company's own website) are ever
+// used now.
 const hunterService = require("./hunterService");
 const websiteEmailScraper = require("./websiteEmailScraper");
-const groqService = require("./groqService");
 const { getCredential } = require("../utils/credentials");
+const dns = require("dns").promises;
 
 const HIRING_TYPES = ["hr", "hiring", "recruiting", "recruitment", "careers", "jobs", "talent", "people"];
 
@@ -22,8 +30,23 @@ function isHiringType(type) {
   return HIRING_TYPES.includes(String(type || "").toLowerCase());
 }
 
+// Cheap sanity check before we ever hand an address to the sender: does its
+// domain even accept mail? This can't catch a mailbox that doesn't exist on
+// an otherwise-valid mail server, but it does catch dead/parked/typo'd
+// domains up front instead of letting them bounce after send.
+async function hasMailServer(email) {
+  const domain = String(email || "").split("@")[1];
+  if (!domain) return false;
+  try {
+    const records = await dns.resolveMx(domain);
+    return Array.isArray(records) && records.length > 0;
+  } catch {
+    return false;
+  }
+}
+
 // Returns { email, confidence, type, source } | null
-async function findHiringEmail({ userId, company, groqKey }) {
+async function findHiringEmail({ userId, company }) {
   if (!company?.website) return null;
 
   const hunterKey = await getCredential(userId, "hunter");
@@ -47,20 +70,11 @@ async function findHiringEmail({ userId, company, groqKey }) {
     const raw = await finder.search(domain, company.website);
     best = finder.pick(raw);
   } catch {
-    best = null; // finder failure just means "try the fallback"
+    best = null; // finder failure just means "no email found"
   }
 
-  if (best?.email && isHiringType(best.type)) {
+  if (best?.email && isHiringType(best.type) && (await hasMailServer(best.email))) {
     return { email: best.email, confidence: best.confidence ?? null, type: best.type, source: finder.name };
-  }
-
-  // The site had nothing hiring-specific (or nothing at all) - ask Groq to
-  // confirm the real hiring email from its own knowledge, as a last resort.
-  if (groqKey) {
-    const guess = await groqService.findHiringEmailGuess({ company }, groqKey).catch(() => null);
-    if (guess?.email) {
-      return { email: guess.email, confidence: guess.confidence, type: "hiring", source: "groq" };
-    }
   }
 
   return null;

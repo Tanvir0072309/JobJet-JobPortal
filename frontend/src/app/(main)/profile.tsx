@@ -96,6 +96,49 @@ export default function ProfileScreen() {
     }
   };
 
+  // Replaces an existing document with a freshly picked file, keeping the
+  // same document_type/post_tag - used by every "Change" action (both the
+  // per-post resume in Interested Posts, and any doc in the general
+  // Documents list). Uploads the new file first and only removes the old
+  // one once that succeeds, so a failed pick/upload never leaves the
+  // candidate with nothing attached. Without deleting the old row here, a
+  // "Change" just piled up duplicate documents with the same tag instead of
+  // actually replacing anything.
+  const replaceDocument = async (oldDoc: any, documentType: string, postTag?: string | null) => {
+    const result = await DocumentPicker.getDocumentAsync({
+      multiple: false,
+      copyToCacheDirectory: true,
+      type: [
+        "application/pdf",
+        "application/msword",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "image/png",
+        "image/jpeg",
+      ],
+    });
+    if (result.canceled || !result.assets?.[0]) return;
+
+    const asset = result.assets[0];
+    const uploadRes = await profileService.uploadDocument(
+      { uri: asset.uri, name: asset.name, mimeType: asset.mimeType },
+      documentType,
+      postTag || undefined
+    );
+    // If the document being replaced was the Default for its type, carry
+    // that flag over to the new file - otherwise "Change" on a Default
+    // resume would silently leave no default set at all.
+    if (oldDoc?.is_default && uploadRes?.document?.id) {
+      await profileService.setDefaultDocument(uploadRes.document.id).catch(() => {});
+    }
+    if (oldDoc?.id) {
+      await profileService.deleteDocument(oldDoc.id).catch(() => {
+        // Best-effort - the new document is already uploaded and usable
+        // even if cleaning up the old row fails.
+      });
+    }
+    await load();
+  };
+
   const handleUpload = async (documentType: string) => {
     const result = await DocumentPicker.getDocumentAsync({
       multiple: false,
@@ -235,26 +278,13 @@ export default function ProfileScreen() {
   };
 
   const handleAttachPostDocument = async (post: string) => {
-    const result = await DocumentPicker.getDocumentAsync({
-      multiple: false,
-      copyToCacheDirectory: true,
-      type: [
-        "application/pdf",
-        "application/msword",
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        "image/png",
-        "image/jpeg",
-      ],
-    });
-    if (result.canceled || !result.assets?.[0]) return;
-
-    const asset = result.assets[0];
     setUploadingPost(post);
     try {
       // Tagged as this specific post's resume - shows as "attached" (green)
       // for this post going forward, without touching the default resume.
-      await profileService.uploadDocument({ uri: asset.uri, name: asset.name, mimeType: asset.mimeType }, "resume", post);
-      await load();
+      // Replaces whatever was already tagged for this post (if anything)
+      // instead of leaving the old one behind as an orphaned duplicate.
+      await replaceDocument(documentForPost(post), "resume", post);
     } catch (err) {
       Alert.alert("Upload failed", err instanceof Error ? err.message : "Please try again.");
     } finally {
@@ -366,7 +396,21 @@ export default function ProfileScreen() {
                       {doc.document_type} · {(doc.file_size_bytes / 1024).toFixed(0)} KB
                       {doc.is_default ? " · Default" : ""}
                     </Text>
+                    {doc.post_tag ? (
+                      <View style={styles.attachedRow}>
+                        <Feather name="bookmark" size={11} color={colors.primary} />
+                        <Text style={[styles.attachedText, { color: colors.primary }]} numberOfLines={1}>
+                          For: {doc.post_tag}
+                        </Text>
+                      </View>
+                    ) : null}
                   </View>
+                  <Pressable
+                    onPress={() => replaceDocument(doc, doc.document_type, doc.post_tag)}
+                    style={styles.docAction}
+                  >
+                    <Text style={styles.docActionText}>Change</Text>
+                  </Pressable>
                   <Pressable onPress={() => handleSetDefault(doc.id)} style={styles.docAction}>
                     <Text style={styles.docActionText}>{doc.is_default ? "Default" : "Set Default"}</Text>
                   </Pressable>

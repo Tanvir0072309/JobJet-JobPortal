@@ -243,49 +243,53 @@ async function discoverCompanies({ location, industry = "any", limit = 20, workM
 // company's own website couldn't be scraped for one. Groq is told to
 // answer null/not-confident rather than invent something, and the caller
 // still double-checks the shape of whatever comes back.
-function buildHiringEmailPrompt({ company }) {
-  return [
-    `Company: ${company.name}`,
-    company.website ? `Website: ${company.website}` : null,
-    "What is this company's real, publicly-known HIRING/careers/HR/recruiting email address (e.g. careers@, jobs@, hr@, recruiting@ on their own domain)?",
-    "This must specifically be a hiring/recruitment contact - never a general support, sales, or press address.",
-    "Only answer with an address if you are reasonably confident it is genuinely used for hiring at this specific company. If you are not confident, say so honestly instead of guessing a generic pattern.",
-    'Respond ONLY as strict JSON: {"email": "..." or null, "confident": true or false} - no markdown, no extra text.',
+// NOTE: this file used to also export findHiringEmailGuess, which asked the
+// model to "confirm" a company's hiring email from its own training
+// knowledge as a last-resort fallback. It was removed from
+// emailFinderService's pipeline (see that file for why) - an LLM cannot
+// actually verify a mailbox exists, so it produced confident-sounding
+// addresses that hard-bounced ("no such user"). Kept out entirely rather
+// than left dead here, so nothing accidentally wires it back in.
+
+async function draftManualEmailBody({ profile, subject, tone }, apiKey) {
+  const skills = [profile?.skills, profile?.programming_languages, profile?.frameworks]
+    .flat()
+    .filter(Boolean)
+    .join(", ");
+
+  const prompt = [
+    `Candidate name: ${profile?.full_name || "The candidate"}`,
+    profile?.headline ? `Headline: ${profile.headline}` : null,
+    profile?.about_me ? `About: ${profile.about_me}` : null,
+    skills ? `Key skills: ${skills}` : null,
+    `Email subject line the candidate already wrote: "${subject}"`,
+    `Desired tone: ${tone || "professional"}`,
+    "",
+    "Using the subject line to infer the role/company being applied to (if it names one), write a short, warm, specific job-application email body (100-160 words) from this candidate.",
+    "Do not repeat the subject line verbatim inside the body. No placeholders like [Company] or [Your Name] - use the real values given, and phrase things generically wherever the subject doesn't specify a detail.",
+    'Respond ONLY as strict JSON: {"body": "..."} - no markdown, no extra text.',
   ]
     .filter(Boolean)
     .join("\n");
+
+  const parsed = await postJson(
+    {
+      model: GROQ_MODEL,
+      messages: [
+        {
+          role: "system",
+          content:
+            "You are an expert career coach who writes concise, warm, specific job-application emails. Always respond with valid JSON only.",
+        },
+        { role: "user", content: prompt },
+      ],
+      temperature: 0.6,
+      response_format: { type: "json_object" },
+    },
+    apiKey
+  );
+
+  return { body: typeof parsed?.body === "string" ? parsed.body : "" };
 }
 
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-async function findHiringEmailGuess({ company }, apiKey) {
-  if (!apiKey) return null;
-
-  try {
-    const parsed = await postJson(
-      {
-        model: GROQ_MODEL,
-        messages: [
-          {
-            role: "system",
-            content:
-              "You confirm real, publicly-known company hiring-email addresses. You never invent an address you aren't reasonably confident about, and you always respond with valid JSON only.",
-          },
-          { role: "user", content: buildHiringEmailPrompt({ company }) },
-        ],
-        temperature: 0.2,
-        response_format: { type: "json_object" },
-      },
-      apiKey
-    );
-
-    if (!parsed?.confident || typeof parsed?.email !== "string") return null;
-    const email = parsed.email.trim().toLowerCase();
-    if (!EMAIL_RE.test(email)) return null;
-    return { email, confidence: 45 };
-  } catch {
-    return null; // best-effort fallback - a failure here just means no guess.
-  }
-}
-
-module.exports = { generateApplicationEmail, discoverCompanies, findHiringEmailGuess };
+module.exports = { generateApplicationEmail, discoverCompanies, draftManualEmailBody };

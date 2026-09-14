@@ -7,11 +7,12 @@ type Props = TextInputProps & {
   error?: string;
 };
 
-export function Input({ label, error, style, ...rest }: Props) {
+export const Input = React.forwardRef<TextInput, Props>(function Input({ label, error, style, ...rest }, ref) {
   return (
     <View style={styles.container}>
       {label ? <Text style={styles.label}>{label}</Text> : null}
       <TextInput
+        ref={ref}
         placeholderTextColor={colors.textMuted}
         style={[styles.input, error ? styles.inputError : null, style]}
         {...rest}
@@ -19,7 +20,7 @@ export function Input({ label, error, style, ...rest }: Props) {
       {error ? <Text style={styles.error}>{error}</Text> : null}
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   container: { marginBottom: spacing.md, width: "100%" },

@@ -7,6 +7,10 @@ export type DocumentItem = {
   file_type: string;
   file_size_bytes: number;
   is_default: boolean;
+  // Which interested post (e.g. "Backend Developer") this specific
+  // resume/project-list was tagged for on the Profile screen. null/undefined
+  // means it's the general/default document for its document_type.
+  post_tag?: string | null;
   created_at: string;
   updated_at: string;
 };

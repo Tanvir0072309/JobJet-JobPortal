@@ -103,6 +103,15 @@ export function sendManualEmail(payload: { to: string; subject?: string; body: s
   });
 }
 
+// Auto-drafts a message body from just the subject line, used by the
+// manual "Send Email" screen's 3-second "stopped typing the subject" timer.
+export function draftMessageFromSubject(subject: string) {
+  return apiRequest<{ success: boolean; body: string }>("/api/applications/draft-message", {
+    method: "POST",
+    body: { subject },
+  });
+}
+
 export function listUnreadReplies() {
   return apiRequest<{ success: boolean; replies: any[] }>("/api/email/replies/unread");
 }

@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { View, Text, StyleSheet, ScrollView, Pressable, Alert } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { Feather } from "@expo/vector-icons";
@@ -6,10 +6,14 @@ import { Card } from "../../components/Card";
 import { Input } from "../../components/Input";
 import { Button } from "../../components/Button";
 import { useAuth } from "../../context/AuthContext";
-import { sendManualEmail } from "../../services/applicationsService";
+import { sendManualEmail, draftMessageFromSubject } from "../../services/applicationsService";
 import { listDocuments, type DocumentItem } from "../../services/documentsService";
 import { ApiError } from "../../services/api";
 import { colors, spacing, typography, radius } from "../../constants/jobjetTheme";
+
+// How long to wait after the user stops typing the subject before we
+// auto-draft the message body from it.
+const SUBJECT_DRAFT_DELAY_MS = 3000;
 
 export default function SendEmailScreen() {
   const router = useRouter();
@@ -23,6 +27,50 @@ export default function SendEmailScreen() {
   const [sending, setSending] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [noticeIsError, setNoticeIsError] = useState(false);
+  const [draftingMessage, setDraftingMessage] = useState(false);
+
+  // Auto-draft the message body a few seconds after the user stops typing
+  // the subject line - reads the subject (and, via the backend, the
+  // profile/resume) and writes a first-pass message into the "Write
+  // message" box so there's always something sensible there already.
+  // Only ever overwrites what WE last auto-filled (or an empty box) - if
+  // the person has since typed their own words in, their edits are never
+  // clobbered by a later subject change.
+  const messageRef = useRef<any>(null);
+  const lastAutoBodyRef = useRef<string>("");
+  const draftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleSubjectChange = (value: string) => {
+    setSubject(value);
+    if (draftTimerRef.current) clearTimeout(draftTimerRef.current);
+
+    const trimmed = value.trim();
+    if (!trimmed) return;
+
+    draftTimerRef.current = setTimeout(async () => {
+      // Don't stomp on a message the user actually wrote themselves.
+      if (message.trim() && message !== lastAutoBodyRef.current) return;
+      setDraftingMessage(true);
+      try {
+        const res = await draftMessageFromSubject(trimmed);
+        if (res.body) {
+          lastAutoBodyRef.current = res.body;
+          setMessage(res.body);
+          messageRef.current?.focus?.();
+        }
+      } catch {
+        // Non-fatal - auto-draft is a convenience, not a requirement.
+      } finally {
+        setDraftingMessage(false);
+      }
+    }, SUBJECT_DRAFT_DELAY_MS);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (draftTimerRef.current) clearTimeout(draftTimerRef.current);
+    };
+  }, []);
 
   const load = useCallback(async () => {
     try {
@@ -113,12 +161,18 @@ export default function SendEmailScreen() {
         />
 
         <Text style={styles.label}>Subject</Text>
-        <Input value={subject} onChangeText={setSubject} placeholder="Application for ..." />
+        <Input value={subject} onChangeText={handleSubjectChange} placeholder="Application for ..." />
 
-        <Text style={styles.label}>Write message</Text>
+        <View style={styles.messageLabelRow}>
+          <Text style={styles.label}>Write message</Text>
+          {draftingMessage ? <Text style={styles.draftingText}>Writing a message for you…</Text> : null}
+        </View>
         <Input
+          ref={messageRef}
           value={message}
-          onChangeText={setMessage}
+          onChangeText={(value) => {
+            setMessage(value);
+          }}
           placeholder="Write your email here..."
           multiline
           numberOfLines={10}
@@ -138,9 +192,14 @@ export default function SendEmailScreen() {
                       size={16}
                       color={checked ? colors.success : colors.textMuted}
                     />
-                    <Text style={styles.docPillText} numberOfLines={1}>
-                      {doc.name}
-                    </Text>
+                    <View style={{ flexShrink: 1 }}>
+                      <Text style={styles.docPillText} numberOfLines={1}>
+                        {doc.name}
+                      </Text>
+                      <Text style={styles.docPillMeta} numberOfLines={1}>
+                        {doc.post_tag ? `For: ${doc.post_tag}` : doc.is_default ? "Default" : doc.document_type}
+                      </Text>
+                    </View>
                   </Pressable>
                 );
               })}
@@ -170,6 +229,8 @@ const styles = StyleSheet.create({
   fromValue: { ...typography.bodyBold, color: colors.textPrimary, flexShrink: 1, marginLeft: spacing.sm },
   divider: { height: 1, backgroundColor: colors.border, marginBottom: spacing.sm },
   label: { ...typography.small, color: colors.textSecondary, marginBottom: spacing.xs, marginTop: spacing.sm },
+  messageLabelRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: spacing.sm },
+  draftingText: { ...typography.small, color: colors.textMuted, fontStyle: "italic" },
   messageBox: { minHeight: 180, textAlignVertical: "top" },
   docList: { flexDirection: "row", flexWrap: "wrap", gap: spacing.xs },
   docPill: {
@@ -184,6 +245,7 @@ const styles = StyleSheet.create({
     maxWidth: 220,
   },
   docPillText: { ...typography.small, color: colors.textPrimary },
+  docPillMeta: { fontSize: 11, color: colors.textMuted },
   noticeBox: { borderRadius: radius.sm, padding: spacing.sm, marginTop: spacing.sm },
   noticeError: { backgroundColor: colors.dangerBg },
   noticeSuccess: { backgroundColor: "#DCFCE7" },
